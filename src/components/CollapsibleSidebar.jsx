@@ -148,12 +148,16 @@ export function CollapsibleSidebar() {
         {/* Authentication Account Profile Widget */}
         <div className="border-t border-white/5 pt-4">
           {user ? (
-            <div className="flex items-center justify-between gap-3 bg-white/5 border border-white/5 rounded-xl p-3">
+            <div 
+              onClick={() => navigate('/login')}
+              className="flex items-center justify-between gap-3 bg-white/5 border border-white/5 hover:border-brand-primary/30 rounded-xl p-3 cursor-pointer transition-all duration-200 group"
+              title="Manage Platform Session"
+            >
               <div className="flex items-center gap-3 min-w-0">
                 <img 
                   src={user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&q=80'} 
                   alt={user.name} 
-                  className="w-8 h-8 rounded-full border border-brand-primary/40 object-cover flex-shrink-0"
+                  className="w-8 h-8 rounded-full border border-brand-primary/40 object-cover flex-shrink-0 group-hover:scale-105 transition-transform"
                 />
                 {!isCollapsed && (
                   <div className="flex flex-col min-w-0 text-left animate-fade-in">
@@ -164,7 +168,7 @@ export function CollapsibleSidebar() {
               </div>
               {!isCollapsed && (
                 <button 
-                  onClick={() => { logout(); navigate('/'); }}
+                  onClick={(e) => { e.stopPropagation(); logout(); navigate('/'); }}
                   className="text-text-muted hover:text-rose-500 cursor-pointer p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors"
                   title="Sign Out"
                 >

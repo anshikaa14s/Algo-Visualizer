@@ -23,7 +23,7 @@ export function SortingPage() {
   const [algorithm, setAlgorithm] = useState('bubble');
   const [array, setArray] = useState([]);
   const [arraySize, setArraySize] = useState(35);
-  const [speed, setSpeed] = useState(100); // ms per step
+  const [speed, setSpeed] = useState(300); // ms per step
   const [isPlaying, setIsPlaying] = useState(false);
   
   // Highlighting states
@@ -41,6 +41,11 @@ export function SortingPage() {
   const generatorRef = useRef(null);
   const timerRef = useRef(null);
   const arrayRef = useRef([]);
+
+  const speedRef = useRef(speed);
+  useEffect(() => {
+    speedRef.current = speed;
+  }, [speed]);
 
   const { soundEnabled, toggleSound, playTone } = useAudioSynth();
 
@@ -177,14 +182,14 @@ export function SortingPage() {
     if (done) {
       setIsPlaying(false);
       if (timerRef.current) {
-        clearInterval(timerRef.current);
+        clearTimeout(timerRef.current);
         timerRef.current = null;
       }
       setCompared([]);
       setSwapped([]);
       setActive([]);
       setStepDesc("Sorting finished successfully!");
-      return;
+      return true;
     }
 
     // Apply values yielded by generator
@@ -205,52 +210,41 @@ export function SortingPage() {
       const idx = value.swapped[0];
       playTone(value.array[idx], Math.max(...value.array));
     }
+    return false;
   };
+
+  const scheduleNextSortingStep = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    
+    timerRef.current = setTimeout(() => {
+      const isDone = stepForward();
+      if (!isDone) {
+        scheduleNextSortingStep();
+      }
+    }, speedRef.current);
+  }, []);
 
   // Start continuous loop
   const startSorting = () => {
     if (isPlaying) return;
     setIsPlaying(true);
-    
-    // Trigger first step immediately
-    stepForward();
-    
-    timerRef.current = setInterval(() => {
-      stepForward();
-    }, speed);
+    scheduleNextSortingStep();
   };
 
   // Pause loop
   const pauseSorting = () => {
     setIsPlaying(false);
     if (timerRef.current) {
-      clearInterval(timerRef.current);
+      clearTimeout(timerRef.current);
       timerRef.current = null;
     }
   };
-
-  // Update loop speed dynamically if running
-  useEffect(() => {
-    if (isPlaying) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      timerRef.current = setInterval(() => {
-        stepForward();
-      }, speed);
-    }
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, [speed, isPlaying]);
 
   // Clean up timers
   useEffect(() => {
     return () => {
       if (timerRef.current) {
-        clearInterval(timerRef.current);
+        clearTimeout(timerRef.current);
       }
     };
   }, []);
@@ -317,8 +311,8 @@ export function SortingPage() {
                 min="10"
                 max="800"
                 step="10"
-                value={speed}
-                onChange={(e) => setSpeed(Number(e.target.value))}
+                value={810 - speed}
+                onChange={(e) => setSpeed(810 - Number(e.target.value))}
                 className="w-full accent-brand-primary h-1 rounded-lg mt-2.5 cursor-pointer bg-white/10"
               />
             </div>
@@ -361,17 +355,49 @@ export function SortingPage() {
             </div>
           </div>
 
-          <div className="flex-1 flex items-end justify-center gap-0.5 md:gap-1.5 px-4 pb-2 mt-8 overflow-hidden h-[240px]">
+          <div className="flex-1 flex items-end justify-center gap-1 md:gap-2 px-4 pb-2 mt-4 overflow-hidden h-[250px]">
             {array.map((val, idx) => {
-              const maxVal = Math.max(...array);
-              const heightPct = `${(val / maxVal) * 100}%`;
+              const maxVal = Math.max(...array) || 1;
+              const heightPct = `${(val / maxVal) * 70 + 12}%`; // Scaled to leave exact margins for labels
+              const transitionDuration = isPlaying ? `${Math.min(speed / 2, 200)}ms` : '150ms';
+
+              const isCompared = compared.includes(idx);
+              const isSwapped = swapped.includes(idx);
+              const isActive = active.includes(idx);
+
               return (
-                <div
+                <div 
                   key={idx}
-                  style={{ height: heightPct }}
-                  className={`w-full max-w-[20px] rounded-t-sm bg-gradient-to-t transition-all duration-100 ${getBarColorClass(idx)}`}
-                  title={`Index: ${idx}, Value: ${val}`}
-                />
+                  className="flex flex-col items-center justify-end h-full flex-1 max-w-[30px] group relative"
+                >
+                  {/* Numerical Value Label above the bar */}
+                  {arraySize <= 35 && (
+                    <span className="text-[9px] font-mono font-bold text-white mb-1 select-none animate-fade-in opacity-80 group-hover:opacity-100 transition-opacity">
+                      {val}
+                    </span>
+                  )}
+
+                  {/* The Graphic Bar element */}
+                  <div
+                    style={{ height: heightPct, transitionDuration }}
+                    className={`w-full rounded-t-md bg-gradient-to-t transition-all ${getBarColorClass(idx)} relative`}
+                    title={`Index: ${idx}, Value: ${val}`}
+                  >
+                    {/* Pulsing neon notification light for active operations */}
+                    {(isCompared || isSwapped || isActive) && (
+                      <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full animate-ping ${
+                        isSwapped ? 'bg-rose-500' : isCompared ? 'bg-yellow-400' : 'bg-cyan-400'
+                      }`} />
+                    )}
+                  </div>
+
+                  {/* Array Index Label below the bar */}
+                  {arraySize <= 35 && (
+                    <span className="text-[9px] font-mono text-text-muted mt-1 select-none font-semibold">
+                      {idx}
+                    </span>
+                  )}
+                </div>
               );
             })}
           </div>

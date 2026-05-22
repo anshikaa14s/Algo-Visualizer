@@ -10,7 +10,8 @@ import {
   RefreshCw, 
   Cpu, 
   Database,
-  HelpCircle
+  HelpCircle,
+  Plus
 } from 'lucide-react';
 
 export function GraphAlgorithms() {
@@ -44,6 +45,7 @@ export function GraphAlgorithms() {
   const [algo, setAlgo] = useState('dijkstra'); // bfs, dfs, dijkstra
   const [speed, setSpeed] = useState(600); // ms per step
   const [isPlaying, setIsPlaying] = useState(false);
+  const [customSize, setCustomSize] = useState(8);
 
   // Execution states
   const [visited, setVisited] = useState(new Set());
@@ -57,7 +59,14 @@ export function GraphAlgorithms() {
   // Interaction refs
   const svgRef = useRef(null);
   const draggedNodeRef = useRef(null);
-  const timerRef = useRef(null);
+  
+  const speedRef = useRef(speed);
+  useEffect(() => {
+    speedRef.current = speed;
+  }, [speed]);
+
+  const solverRef = useRef(null);
+  const timeoutRef = useRef(null);
 
   // Audio tone synth generator
   const playTone = useCallback((nodeId) => {
@@ -173,10 +182,79 @@ export function GraphAlgorithms() {
     }
   };
 
-  // Node double click -> Remove Node
+  // Dynamic random graph generator
+  const generateRandomGraph = (numNodes = 8) => {
+    resetVisuals();
+    const newNodes = [];
+    const newEdges = [];
+    const cx = 350;
+    const cy = 200;
+    
+    // Circular layout with random dispersion
+    for (let i = 0; i < numNodes; i++) {
+      const angle = (2 * Math.PI * i) / numNodes;
+      const radius = 110 + Math.random() * 40;
+      const x = cx + radius * Math.cos(angle) + (Math.random() * 30 - 15);
+      const y = cy + radius * Math.sin(angle) + (Math.random() * 30 - 15);
+      newNodes.push({
+        id: i,
+        x: Math.max(40, Math.min(650, x)),
+        y: Math.max(40, Math.min(320, y)),
+        status: 'normal'
+      });
+    }
+
+    // Spanning tree connectivity
+    for (let i = 1; i < numNodes; i++) {
+      const parent = Math.floor(Math.random() * i);
+      newEdges.push({ from: parent, to: i, isPath: false });
+    }
+
+    // Additional cyclic complexity links
+    const extraEdgesCount = Math.floor(numNodes * 0.4);
+    for (let k = 0; k < extraEdgesCount; k++) {
+      const from = Math.floor(Math.random() * numNodes);
+      const to = Math.floor(Math.random() * numNodes);
+      if (from !== to && !newEdges.some(e => (e.from === from && e.to === to) || (e.from === to && e.to === from))) {
+        newEdges.push({ from, to, isPath: false });
+      }
+    }
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+    setStartNode(0);
+    setTargetNode(numNodes - 1);
+  };
+
+  // Add a node at a random unoccupied center-ish coordinate (distinct node initially)
+  const handleAddNode = () => {
+    resetVisuals();
+    const nextId = nodes.length > 0 ? Math.max(...nodes.map(n => n.id)) + 1 : 0;
+    const x = 150 + Math.random() * 400;
+    const y = 100 + Math.random() * 200;
+
+    setNodes(prev => {
+      const newNodes = [...prev, { id: nextId, x, y, status: 'normal' }];
+      if (prev.length === 0) {
+        setStartNode(nextId);
+      } else if (prev.length === 1) {
+        setTargetNode(nextId);
+      }
+      return newNodes;
+    });
+  };
+
+  // Node double click -> Remove Node (with safety check on start/target selections)
   const handleNodeDoubleClick = (nodeId) => {
     resetVisuals();
-    setNodes(prev => prev.filter(n => n.id !== nodeId));
+    setNodes(prev => {
+      const remaining = prev.filter(n => n.id !== nodeId);
+      if (remaining.length > 0) {
+        setStartNode(s => remaining.some(n => n.id === s) ? s : remaining[0].id);
+        setTargetNode(t => remaining.some(n => n.id === t) ? t : remaining[remaining.length - 1].id);
+      }
+      return remaining;
+    });
     setEdges(prev => prev.filter(e => e.from !== nodeId && e.to !== nodeId));
   };
 
@@ -215,9 +293,25 @@ export function GraphAlgorithms() {
     draggedNodeRef.current = null;
   };
 
-  // Node click -> Select Node / Create Edge
+  // Node click -> Select Node / Create Edge / Set Start or Target Nodes
   const handleNodeClick = (e, nodeId) => {
     e.stopPropagation();
+    
+    // Shift click to set Start node
+    if (e.shiftKey) {
+      resetVisuals();
+      setStartNode(nodeId);
+      setStepLog(prev => [...prev, `Set Node ${nodeId} as the Start Node.`]);
+      return;
+    }
+    // Ctrl or Cmd click to set Target node
+    if (e.ctrlKey || e.metaKey) {
+      resetVisuals();
+      setTargetNode(nodeId);
+      setStepLog(prev => [...prev, `Set Node ${nodeId} as the Target Node.`]);
+      return;
+    }
+
     resetVisuals();
     if (selectedNode === null) {
       setSelectedNode(nodeId);
@@ -245,10 +339,11 @@ export function GraphAlgorithms() {
   // Reset visuals and solver structures
   const resetVisuals = () => {
     setIsPlaying(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
+    solverRef.current = null;
     setNodes(prev => prev.map(n => ({ ...n, status: 'normal' })));
     setEdges(prev => prev.map(e => ({ ...e, isPath: false })));
     setVisited(new Set());
@@ -278,7 +373,7 @@ export function GraphAlgorithms() {
       playTone(curr);
       
       yield { 
-        line: 4, 
+        line: 5, 
         desc: `Dequeue Node ${curr} from Queue and inspect neighbors.`, 
         nodeUpdates: { [curr]: 'active' } 
       };
@@ -361,7 +456,7 @@ export function GraphAlgorithms() {
       playTone(curr);
 
       yield { 
-        line: 4, 
+        line: 5, 
         desc: `Pop Node ${curr} from Stack. Mark as Visited and check links.`, 
         nodeUpdates: { [curr]: 'active' } 
       };
@@ -380,7 +475,7 @@ export function GraphAlgorithms() {
         }
 
         yield {
-          line: 6,
+          line: 8,
           desc: `DFS Path reached target Node ${targetNode}! Tracing final route.`,
           nodeUpdates: pathNodes.reduce((acc, nid) => ({ ...acc, [nid]: 'path' }), {}),
           pathEdges
@@ -404,7 +499,7 @@ export function GraphAlgorithms() {
           setParents({ ...parentMap });
 
           yield {
-            line: 9,
+            line: 10,
             desc: `Link Node ${n} discovered. Push to Stack and link parent: ${curr}.`,
             nodeUpdates: { [n]: 'queue', [curr]: 'visited' }
           };
@@ -431,7 +526,7 @@ export function GraphAlgorithms() {
     setDistances({ ...distMap });
     setFringe(pq.map(item => `${item.node}(d=${item.dist})`));
 
-    yield { line: 2, desc: `Initialize starting distance map. Set distance to Node ${startNode} to 0.`, nodeUpdates: { [startNode]: 'queue' } };
+    yield { line: 3, desc: `Initialize starting distance map. Set distance to Node ${startNode} to 0.`, nodeUpdates: { [startNode]: 'queue' } };
 
     while (pq.length > 0) {
       // Sort to simulate Min-Priority Queue
@@ -467,7 +562,7 @@ export function GraphAlgorithms() {
         }
 
         yield {
-          line: 7,
+          line: 6,
           desc: `Target reached! Dijkstra confirmed shortest path weight is ${distMap[targetNode]}!`,
           nodeUpdates: pathNodes.reduce((acc, nid) => ({ ...acc, [nid]: 'path' }), {}),
           pathEdges
@@ -513,24 +608,16 @@ export function GraphAlgorithms() {
     yield { line: 15, desc: `Min-Heap empty. Dijkstra reports target ${targetNode} is unreachable.`, nodeUpdates: {} };
   }
 
-  // Handle visualizer runner loop
-  const startSolving = () => {
-    resetVisuals();
-    setIsPlaying(true);
-
-    const solver = algo === 'bfs' 
-      ? bfsGenerator() 
-      : algo === 'dfs' 
-      ? dfsGenerator() 
-      : dijkstraGenerator();
-
-    timerRef.current = setInterval(() => {
-      const step = solver.next();
+  const scheduleNextStep = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    
+    timeoutRef.current = setTimeout(() => {
+      if (!solverRef.current) return;
+      const step = solverRef.current.next();
       
       if (step.done) {
         setIsPlaying(false);
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+        solverRef.current = null;
         return;
       }
 
@@ -559,13 +646,37 @@ export function GraphAlgorithms() {
       setStepLog(prev => [...prev, desc]);
       setCodeLine(line);
 
-    }, speed);
+      scheduleNextStep();
+    }, speedRef.current);
+  };
+
+  // Update loop speed dynamically if running
+  useEffect(() => {
+    if (isPlaying && solverRef.current && timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      scheduleNextStep();
+    }
+  }, [speed]);
+
+  // Handle visualizer runner loop
+  const startSolving = () => {
+    resetVisuals();
+    setIsPlaying(true);
+
+    const solver = algo === 'bfs' 
+      ? bfsGenerator() 
+      : algo === 'dfs' 
+      ? dfsGenerator() 
+      : dijkstraGenerator();
+
+    solverRef.current = solver;
+    scheduleNextStep();
   };
 
   // Clear Interval on unmount
   useEffect(() => {
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
 
@@ -645,7 +756,16 @@ export function GraphAlgorithms() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleAddNode}
+              className="px-3 py-1.5 rounded-lg bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-brand-primary/20"
+              title="Add a node to the canvas"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Node
+            </button>
+            <div className="h-6 w-[1px] bg-white/10 hidden sm:block"></div>
             <button
               onClick={() => generatePreset('ring')}
               className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-white/5"
@@ -667,6 +787,25 @@ export function GraphAlgorithms() {
               <RefreshCw className="w-3 h-3 text-yellow-400" />
               Star
             </button>
+            <div className="h-6 w-[1px] bg-white/10 hidden sm:block"></div>
+            <div className="flex items-center gap-2 border border-white/5 bg-black/30 rounded-lg px-2.5 py-1.5">
+              <span className="text-[10px] font-mono font-semibold text-text-muted">Nodes: {customSize}</span>
+              <input
+                type="range"
+                min="3"
+                max="15"
+                step="1"
+                value={customSize}
+                onChange={(e) => setCustomSize(parseInt(e.target.value))}
+                className="w-16 accent-brand-primary h-1 rounded bg-slate-700 appearance-none cursor-pointer"
+              />
+              <button
+                onClick={() => generateRandomGraph(customSize)}
+                className="px-2 py-0.5 rounded bg-brand-secondary/25 hover:bg-brand-secondary/40 text-brand-secondary text-[10px] font-bold uppercase transition-colors cursor-pointer border border-brand-secondary/30"
+              >
+                Gen
+              </button>
+            </div>
             <button
               onClick={resetVisuals}
               className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
@@ -680,7 +819,7 @@ export function GraphAlgorithms() {
         {/* Dynamic canvas instruction overlay */}
         <div className="absolute top-26 left-10 flex items-center gap-2 bg-black/60 px-3 py-2 rounded-xl border border-white/5 text-[10px] text-text-muted font-mono z-10 pointer-events-none">
           <HelpCircle className="w-3.5 h-3.5 text-brand-primary animate-pulse" />
-          <span>Double-click to create nodes. Click two nodes to add/remove a link. Drag to position.</span>
+          <span>Double-click to create a node. Click a node to select and set Start/Target. Click two nodes to toggle links. Drag to move.</span>
         </div>
 
         {/* SVG Node Workspace */}
@@ -725,21 +864,38 @@ export function GraphAlgorithms() {
             {nodes.map((node) => {
               let circleColor = 'fill-[#0f172a] stroke-slate-600';
               let ringGlow = false;
+              let glowColor = '';
 
-              if (node.id === selectedNode) {
-                circleColor = 'fill-black stroke-[#f59e0b]'; // gold active selection
+              if (node.id === startNode) {
+                circleColor = 'fill-[#064e3b] stroke-[#10b981]'; // Emerald start
                 ringGlow = true;
-              } else if (node.status === 'active') {
+                glowColor = '#10b981';
+              } else if (node.id === targetNode) {
+                circleColor = 'fill-[#881337] stroke-[#f43f5e]'; // Rose target
+                ringGlow = true;
+                glowColor = '#f43f5e';
+              }
+
+              if (node.status === 'active') {
                 circleColor = 'fill-black stroke-[#f59e0b]'; // active pivot
                 ringGlow = true;
+                glowColor = '#f59e0b';
               } else if (node.status === 'path') {
-                circleColor = 'fill-black stroke-[#d946ef]'; // final shortest path
+                circleColor = 'fill-[#701a75] stroke-[#d946ef]'; // final shortest path
                 ringGlow = true;
+                glowColor = '#d946ef';
               } else if (node.status === 'queue') {
-                circleColor = 'fill-black stroke-[#a855f7]'; // queue/stack waitlist
+                circleColor = 'fill-[#581c87] stroke-[#a855f7]'; // queue/stack waitlist
                 ringGlow = true;
+                glowColor = '#a855f7';
               } else if (node.status === 'visited') {
-                circleColor = 'fill-black stroke-[#10b981]'; // visited
+                circleColor = 'fill-[#065f46] stroke-[#34d399]'; // visited
+                ringGlow = true;
+                glowColor = '#34d399';
+              } else if (node.id === selectedNode) {
+                circleColor = 'fill-black stroke-[#f59e0b]'; // gold active selection
+                ringGlow = true;
+                glowColor = '#f59e0b';
               }
 
               return (
@@ -757,7 +913,7 @@ export function GraphAlgorithms() {
                       cy={node.y}
                       r={24}
                       fill="none"
-                      stroke={node.status === 'path' ? '#d946ef' : node.status === 'queue' ? '#a855f7' : '#f59e0b'}
+                      stroke={glowColor || '#f59e0b'}
                       strokeWidth={1.5}
                       className="animate-ping opacity-25"
                     />
@@ -771,6 +927,48 @@ export function GraphAlgorithms() {
                     className={`transition-all duration-300 ${circleColor} stroke-[2.5] group-hover:scale-110`}
                     filter={ringGlow ? 'url(#glow)' : ''}
                   />
+
+                  {/* Floating labels for Start and Target */}
+                  {node.id === startNode && (
+                    <g>
+                      <rect
+                        x={node.x - 22}
+                        y={node.y - 32}
+                        width={44}
+                        height={12}
+                        rx={4}
+                        className="fill-emerald-500/20 stroke-emerald-500/40 stroke-[0.5]"
+                      />
+                      <text
+                        x={node.x}
+                        y={node.y - 23}
+                        textAnchor="middle"
+                        className="fill-emerald-400 font-mono text-[7px] font-bold select-none pointer-events-none tracking-widest"
+                      >
+                        START
+                      </text>
+                    </g>
+                  )}
+                  {node.id === targetNode && (
+                    <g>
+                      <rect
+                        x={node.x - 24}
+                        y={node.y - 32}
+                        width={48}
+                        height={12}
+                        rx={4}
+                        className="fill-rose-500/20 stroke-rose-500/40 stroke-[0.5]"
+                      />
+                      <text
+                        x={node.x}
+                        y={node.y - 23}
+                        textAnchor="middle"
+                        className="fill-rose-400 font-mono text-[7px] font-bold select-none pointer-events-none tracking-widest"
+                      >
+                        TARGET
+                      </text>
+                    </g>
+                  )}
 
                   {/* Node indices labels */}
                   <text
@@ -791,6 +989,55 @@ export function GraphAlgorithms() {
 
       {/* RIGHT: Solver Controls & Complexities Panels */}
       <div className="w-full lg:w-[480px] p-6 flex flex-col gap-6 overflow-y-auto max-h-full no-scrollbar">
+        {/* Selected Node Action dashboard */}
+        {selectedNode !== null && (
+          <div className="glass-panel p-4 rounded-2xl border border-[#f59e0b]/30 bg-[#f59e0b]/5 space-y-3 animate-pulse">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#f59e0b] uppercase font-mono tracking-wider">Node {selectedNode} Selected</span>
+              <button 
+                onClick={() => setSelectedNode(null)}
+                className="text-[10px] text-text-muted hover:text-white underline cursor-pointer"
+              >
+                Deselect
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => {
+                  setStartNode(selectedNode);
+                  setSelectedNode(null);
+                  resetVisuals();
+                }}
+                className="py-1.5 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/20 transition-all cursor-pointer"
+              >
+                Set Start
+              </button>
+              <button
+                onClick={() => {
+                  setTargetNode(selectedNode);
+                  setSelectedNode(null);
+                  resetVisuals();
+                }}
+                className="py-1.5 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-[10px] font-bold border border-rose-500/20 transition-all cursor-pointer"
+              >
+                Set Target
+              </button>
+              <button
+                onClick={() => {
+                  handleNodeDoubleClick(selectedNode);
+                  setSelectedNode(null);
+                }}
+                className="py-1.5 px-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-400 text-[10px] font-bold border border-red-500/20 transition-all cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+            <p className="text-[9px] text-text-muted font-mono leading-tight">
+              💡 To create or toggle links, click another node while this node is highlighted.
+            </p>
+          </div>
+        )}
+
         {/* Playback controls */}
         <div className="glass-panel p-5 rounded-2xl border border-white/5 space-y-4">
           <div className="flex flex-col gap-1.5">
@@ -861,14 +1108,14 @@ export function GraphAlgorithms() {
             )}
 
             <div className="flex items-center gap-2 border border-white/5 bg-black/30 rounded-xl px-3 py-2">
-              <span className="text-[10px] font-mono font-semibold text-text-muted">Speed:</span>
+              <span className="text-[10px] font-mono font-semibold text-text-muted">Speed: {speed}ms</span>
               <input
                 type="range"
                 min="150"
                 max="1500"
                 step="50"
-                value={speed}
-                onChange={(e) => setSpeed(parseInt(e.target.value))}
+                value={1650 - speed}
+                onChange={(e) => setSpeed(1650 - parseInt(e.target.value))}
                 className="w-20 accent-brand-primary h-1 rounded-lg bg-slate-700 appearance-none cursor-pointer"
               />
             </div>

@@ -7,7 +7,9 @@ import {
   Cpu, 
   MapPin, 
   Compass, 
-  Sparkles 
+  Sparkles,
+  ChevronRight,
+  Database
 } from 'lucide-react';
 import { dijkstra, bfs, generateRecursiveDivisionMaze } from '../algorithms/pathfinding';
 import { useAudioSynth } from '../hooks/useAudioSynth';
@@ -24,6 +26,8 @@ export function PathfindingPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [algorithm, setAlgorithm] = useState('dijkstra'); // dijkstra, bfs
   const [infoDesc, setInfoDesc] = useState("Draw walls by dragging, relocate start/end pins, and click 'Solve Grid'!");
+  const [speed, setSpeed] = useState(40); // delay in ms per search step
+  const [codeLine, setCodeLine] = useState(0);
 
   // Mouse drag states
   const [isDrawingWall, setIsDrawingWall] = useState(false);
@@ -31,9 +35,57 @@ export function PathfindingPage() {
   const [isDraggingEnd, setIsDraggingEnd] = useState(false);
 
   const { soundEnabled, playTone } = useAudioSynth();
+  const timeoutsRef = useRef([]);
+
+  const speedRef = useRef(speed);
+  useEffect(() => {
+    speedRef.current = speed;
+  }, [speed]);
+
+  const clearAllTimeouts = () => {
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+  };
+
+  const codeSnippets = {
+    dijkstra: [
+      "function Dijkstra(grid, start, end) {",
+      "  let q = getAllNodes(grid);",
+      "  while (q.length > 0) {",
+      "    let curr = extractClosestNode(q);",
+      "    if (curr === end) return buildPath(end);",
+      "    if (curr.distance === Infinity) break;",
+      "    curr.isVisited = true;",
+      "    updateUnvisitedNeighbors(curr, grid);",
+      "  }",
+      "}"
+    ],
+    bfs: [
+      "function BFS(grid, start, end) {",
+      "  let q = [start];",
+      "  while (q.length > 0) {",
+      "    let curr = q.shift();",
+      "    if (curr === end) return buildPath(end);",
+      "    curr.isVisited = true;",
+      "    for (let neighbor of neighbors) {",
+      "      neighbor.previous = curr;",
+      "      q.push(neighbor);",
+      "      neighbor.isVisited = true;",
+      "    }",
+      "  }",
+      "}"
+    ]
+  };
+
+  const complexities = {
+    dijkstra: { time: "O(V log V + E)", space: "O(V)" },
+    bfs: { time: "O(V + E)", space: "O(V)" }
+  };
 
   // Initialize standard grid
   const initializeGrid = (clearAll = true) => {
+    clearAllTimeouts();
+    setCodeLine(0);
     const newGrid = [];
     for (let r = 0; r < ROWS; r++) {
       const currentRow = [];
@@ -176,63 +228,69 @@ export function PathfindingPage() {
 
     const { visitedNodesInOrder, shortestPath } = result;
 
-    animateSearch(visitedNodesInOrder, shortestPath);
+    animateSearchRecursive(visitedNodesInOrder, shortestPath, 0);
   };
 
-  const animateSearch = (visitedNodes, path) => {
-    const speedMs = 15; // Animation speed
+  const animateSearchRecursive = (visitedNodes, path, index = 0) => {
+    if (index === visitedNodes.length) {
+      animateShortestPathRecursive(path, 0);
+      return;
+    }
 
-    for (let i = 0; i <= visitedNodes.length; i++) {
-      if (i === visitedNodes.length) {
-        setTimeout(() => {
-          animateShortestPath(path);
-        }, speedMs * i);
-        return;
+    const tId = setTimeout(() => {
+      const node = visitedNodes[index];
+      if (!node.isStart && !node.isEnd) {
+        const element = document.getElementById(`node-${node.row}-${node.col}`);
+        if (element) {
+          element.classList.add('cell-animation-visited');
+        }
+      }
+      
+      // Dynamic code line debugger highlights simulation
+      const lineOfCode = algorithm === 'dijkstra' 
+        ? [3, 4, 5, 8][index % 4] 
+        : [4, 5, 6, 7][index % 4];
+      setCodeLine(lineOfCode);
+
+      // Play beeping tones periodically to prevent sound crash
+      if (index % 4 === 0) {
+        playTone(node.row * 10 + node.col, ROWS * 10 + COLS);
       }
 
-      setTimeout(() => {
-        const node = visitedNodes[i];
-        if (!node.isStart && !node.isEnd) {
-          const element = document.getElementById(`node-${node.row}-${node.col}`);
-          if (element) {
-            element.classList.add('cell-animation-visited');
-          }
-        }
-        
-        // Play beeping tones periodically to prevent sound crash
-        if (i % 4 === 0) {
-          playTone(node.row * 10 + node.col, ROWS * 10 + COLS);
-        }
-      }, speedMs * i);
-    }
+      animateSearchRecursive(visitedNodes, path, index + 1);
+    }, speedRef.current);
+    timeoutsRef.current.push(tId);
   };
 
-  const animateShortestPath = (path) => {
+  const animateShortestPathRecursive = (path, index = 0) => {
     if (path.length === 0) {
       setInfoDesc("Solver finished! No path exists between start and end pins.");
+      setIsPlaying(false);
+      setCodeLine(0);
+      return;
+    }
+
+    if (index === path.length) {
+      setInfoDesc("Shortest path mapped successfully!");
       setIsPlaying(false);
       return;
     }
 
-    for (let i = 0; i < path.length; i++) {
-      setTimeout(() => {
-        const node = path[i];
-        if (!node.isStart && !node.isEnd) {
-          const element = document.getElementById(`node-${node.row}-${node.col}`);
-          if (element) {
-            // Remove visited class and add path class
-            element.classList.remove('cell-animation-visited');
-            element.classList.add('cell-animation-path');
-          }
+    const tId = setTimeout(() => {
+      const node = path[index];
+      if (!node.isStart && !node.isEnd) {
+        const element = document.getElementById(`node-${node.row}-${node.col}`);
+        if (element) {
+          element.classList.remove('cell-animation-visited');
+          element.classList.add('cell-animation-path');
         }
-        playTone(node.row * 15 + node.col, ROWS * 15 + COLS);
+      }
+      setCodeLine(5); // Highlight buildPath / return path line
+      playTone(node.row * 15 + node.col, ROWS * 15 + COLS);
 
-        if (i === path.length - 1) {
-          setInfoDesc("Shortest path mapped successfully!");
-          setIsPlaying(false);
-        }
-      }, 35 * i);
-    }
+      animateShortestPathRecursive(path, index + 1);
+    }, speedRef.current * 2);
+    timeoutsRef.current.push(tId);
   };
 
   // MAZE GENERATION
@@ -270,7 +328,7 @@ export function PathfindingPage() {
     }
 
     for (let i = 0; i < wallCoords.length; i++) {
-      setTimeout(() => {
+      const tId = setTimeout(() => {
         const { row, col } = wallCoords[i];
         tempGrid[row][col].isWall = true;
         
@@ -285,6 +343,7 @@ export function PathfindingPage() {
           setInfoDesc("Recursive division maze complete! Relocate start/end pins or press Solve Grid.");
         }
       }, 4 * i);
+      timeoutsRef.current.push(tId);
     }
   };
 
@@ -319,6 +378,24 @@ export function PathfindingPage() {
               </select>
             </div>
             
+            <div className="h-6 w-px bg-white/10" />
+
+            {/* Speed Range Slider */}
+            <div className="flex flex-col">
+              <span className="text-[10px] text-text-muted font-mono uppercase tracking-wider font-semibold">Solve Delay: {speed}ms</span>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="range"
+                  min="5"
+                  max="200"
+                  step="5"
+                  value={205 - speed}
+                  onChange={(e) => setSpeed(205 - parseInt(e.target.value))}
+                  className="w-24 accent-brand-primary h-1 rounded bg-slate-700 appearance-none cursor-pointer"
+                />
+              </div>
+            </div>
+
             <div className="h-6 w-px bg-white/10" />
 
             <button
@@ -403,6 +480,29 @@ export function PathfindingPage() {
               </button>
             </div>
 
+            {/* Complexity Matrix details */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="glass-panel p-4 rounded-xl border border-white/5 text-center bg-black/15">
+                <div className="flex items-center justify-center gap-1.5 text-text-muted text-[10px] font-mono font-bold uppercase mb-1">
+                  <Cpu className="w-3.5 h-3.5 text-brand-primary" />
+                  Time Complexity
+                </div>
+                <span className="text-[13px] font-bold tracking-tight text-white font-mono">
+                  {complexities[algorithm].time}
+                </span>
+              </div>
+
+              <div className="glass-panel p-4 rounded-xl border border-white/5 text-center bg-black/15">
+                <div className="flex items-center justify-center gap-1.5 text-text-muted text-[10px] font-mono font-bold uppercase mb-1">
+                  <Database className="w-3.5 h-3.5 text-brand-secondary" />
+                  Space Complexity
+                </div>
+                <span className="text-[13px] font-bold tracking-tight text-white font-mono">
+                  {complexities[algorithm].space}
+                </span>
+              </div>
+            </div>
+
             {/* Quick manual hints */}
             <div className="glass-panel rounded-2xl p-5 border border-white/5 font-mono text-xs text-text-muted space-y-3 bg-black/15">
               <span className="text-[10px] text-text-muted uppercase tracking-wider font-semibold block">Grid Solving Rules</span>
@@ -433,6 +533,25 @@ export function PathfindingPage() {
               </p>
             </div>
 
+            {/* Structured Pseudocode Display */}
+            <div className="glass-panel p-5 rounded-2xl border border-white/5 bg-black/15">
+              <span className="text-[10px] font-mono font-bold text-text-muted uppercase mb-3 block">Structured Implementation Code</span>
+              <div className="bg-black/40 border border-white/5 rounded-xl p-4 font-mono text-[10px] leading-relaxed overflow-hidden">
+                {codeSnippets[algorithm].map((line, idx) => (
+                  <div
+                    key={idx}
+                    className={`py-0.5 px-2 rounded transition-all duration-200 ${
+                      codeLine === idx + 1
+                        ? 'bg-brand-primary/20 text-white font-bold border-l-2 border-brand-primary'
+                        : 'text-text-muted'
+                    }`}
+                  >
+                    {line}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Algorithm info boxes */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-black/15 text-xs leading-relaxed font-sans text-text-muted space-y-2">
@@ -440,9 +559,6 @@ export function PathfindingPage() {
                 <p>
                   A weighted search algorithm that explores coordinates by prioritizing elements with the absolute shortest distance from source. Treats wall cells as infinity weight. Finds the shortest path.
                 </p>
-                <div className="pt-2 font-mono text-[10px] text-brand-primary font-semibold">
-                  Complexity: O((V + E) log V)
-                </div>
               </div>
 
               <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-black/15 text-xs leading-relaxed font-sans text-text-muted space-y-2">
@@ -450,9 +566,6 @@ export function PathfindingPage() {
                 <p>
                   An unweighted search algorithm that explores grid cells layer-by-layer uniformly outwards using a queue. Guarantees finding the absolute shortest path on unweighted grids.
                 </p>
-                <div className="pt-2 font-mono text-[10px] text-brand-secondary font-semibold">
-                  Complexity: O(V + E)
-                </div>
               </div>
             </div>
           </div>

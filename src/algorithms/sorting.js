@@ -36,7 +36,8 @@ export function* bubbleSort(arr) {
 
       if (a[j] > a[j + 1]) {
         let temp = a[j];
-        a[j] = a[j + 1];
+        let smaller = a[j + 1];
+        a[j] = smaller;
         a[j + 1] = temp;
         stats.swaps++;
         yield {
@@ -45,7 +46,7 @@ export function* bubbleSort(arr) {
           swapped: [j, j + 1],
           active: [],
           sorted: [...sortedIndices],
-          desc: `Swapping ${a[j + 1]} and ${a[j]} since ${a[j + 1]} > ${a[j]}.`,
+          desc: `Swapping element ${temp} at index ${j} and ${smaller} at index ${j + 1} since ${temp} > ${smaller}.`,
           stats: { ...stats },
           codeLine: 3
         };
@@ -126,7 +127,8 @@ export function* selectionSort(arr) {
 
     if (minIdx !== i) {
       let temp = a[i];
-      a[i] = a[minIdx];
+      let minVal = a[minIdx];
+      a[i] = minVal;
       a[minIdx] = temp;
       stats.swaps++;
       yield {
@@ -135,7 +137,7 @@ export function* selectionSort(arr) {
         swapped: [i, minIdx],
         active: [],
         sorted: [...sortedIndices],
-        desc: `Swapping index ${i} (${a[minIdx]}) with minimum element at index ${minIdx} (${a[i]}).`,
+        desc: `Swapping element ${temp} at index ${i} with the minimum element ${minVal} found at index ${minIdx}.`,
         stats: { ...stats },
         codeLine: 4
       };
@@ -192,16 +194,18 @@ export function* insertionSort(arr) {
       };
 
       if (a[j] > key) {
-        a[j + 1] = a[j];
+        let shiftedVal = a[j];
+        let originalIdx = j;
+        a[j + 1] = shiftedVal;
         stats.swaps++; // Treat element movement as operations swap
         j--;
         yield {
           array: [...a],
           compared: [],
-          swapped: [j + 1, j + 2],
+          swapped: [originalIdx, originalIdx + 1],
           active: [],
           sorted: [...sortedIndices],
-          desc: `Shifting ${a[j + 2]} to index ${j + 2} since it's greater than key ${key}.`,
+          desc: `Shifting element ${shiftedVal} from index ${originalIdx} to index ${originalIdx + 1} since it's greater than key ${key}.`,
           stats: { ...stats },
           codeLine: 3
         };
@@ -373,9 +377,10 @@ export function* quickSort(arr) {
 
       if (a[j] < pivotValue) {
         i++;
-        let temp = a[i];
-        a[i] = a[j];
-        a[j] = temp;
+        let valI = a[i];
+        let valJ = a[j];
+        a[i] = valJ;
+        a[j] = valI;
         stats.swaps++;
         yield {
           array: [...a],
@@ -383,7 +388,7 @@ export function* quickSort(arr) {
           swapped: [i, j],
           active: [right],
           sorted: Array.from(sortedIndices),
-          desc: `Swapping ${a[i]} (index ${i}) and ${a[j]} (index ${j}) since ${a[j]} < pivot ${pivotValue}.`,
+          desc: `Swapping ${valJ} at index ${j} and ${valI} at index ${i} since ${valJ} < pivot ${pivotValue}.`,
           stats: { ...stats },
           codeLine: 3
         };
@@ -391,7 +396,7 @@ export function* quickSort(arr) {
     }
 
     let temp = a[i + 1];
-    a[i + 1] = a[right];
+    a[i + 1] = pivotValue;
     a[right] = temp;
     stats.swaps++;
     yield {
@@ -400,7 +405,7 @@ export function* quickSort(arr) {
       swapped: [i + 1, right],
       active: [i + 1],
       sorted: Array.from(sortedIndices),
-      desc: `Placed pivot ${pivotValue} in its final sorted position at index ${i + 1}.`,
+      desc: `Placed pivot ${pivotValue} in its final sorted position at index ${i + 1} by swapping with ${temp} at index ${right}.`,
       stats: { ...stats },
       codeLine: 4
     };

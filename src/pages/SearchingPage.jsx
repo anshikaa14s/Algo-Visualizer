@@ -283,8 +283,8 @@ export function SearchingPage() {
                 min="50"
                 max="1000"
                 step="50"
-                value={speed}
-                onChange={(e) => setSpeed(Number(e.target.value))}
+                value={1050 - speed}
+                onChange={(e) => setSpeed(1050 - Number(e.target.value))}
                 className="w-full accent-brand-primary h-1 rounded-lg mt-2.5 cursor-pointer bg-white/10"
               />
             </div>

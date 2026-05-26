@@ -15,6 +15,7 @@ export function LoginPage() {
   const [googlePromptOpen, setGooglePromptOpen] = useState(false);
   const [customGmail, setCustomGmail] = useState('');
   const [customName, setCustomName] = useState('');
+  const [loginStep, setLoginStep] = useState(1);
 
   const runHandshake = (provider, callback) => {
     setLoading(true);
@@ -46,18 +47,53 @@ export function LoginPage() {
   };
 
   const handleGoogleLogin = () => {
+    setLoginStep(1);
     setGooglePromptOpen(true);
   };
 
-  const submitGoogleLogin = () => {
+  const handleEmailSubmit = (e) => {
+    e.preventDefault();
     if (!customGmail) return;
+
+    const knownUsers = JSON.parse(localStorage.getItem('nexus-algo-known-users') || '{}');
+    const existingName = knownUsers[customGmail.toLowerCase()];
+
+    if (existingName) {
+      setGooglePromptOpen(false);
+      runHandshake('google', () => {
+        login({
+          name: existingName,
+          email: customGmail,
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(existingName)}&background=00f2fe&color=0b0f19&bold=true`,
+          provider: 'google'
+        });
+        navigate('/');
+      });
+    } else {
+      const username = customGmail.split('@')[0];
+      const derivedName = username
+        .split(/[\._-]/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+      setCustomName(derivedName);
+      setLoginStep(2);
+    }
+  };
+
+  const handleNameSubmit = (e) => {
+    e.preventDefault();
+    if (!customName) return;
     setGooglePromptOpen(false);
-    
+
+    const knownUsers = JSON.parse(localStorage.getItem('nexus-algo-known-users') || '{}');
+    knownUsers[customGmail.toLowerCase()] = customName;
+    localStorage.setItem('nexus-algo-known-users', JSON.stringify(knownUsers));
+
     runHandshake('google', () => {
       login({
-        name: customName || customGmail.split('@')[0],
+        name: customName,
         email: customGmail,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(customName || customGmail.split('@')[0])}&background=00f2fe&color=0b0f19&bold=true`,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(customName)}&background=00f2fe&color=0b0f19&bold=true`,
         provider: 'google'
       });
       navigate('/');
@@ -241,47 +277,72 @@ export function LoginPage() {
             <h3 className="text-xl font-bold text-white text-center">Sign in with Google</h3>
             <p className="text-xs text-text-muted text-center mt-1 mb-6">to continue to NexusAlgo Visualizer</p>
 
-            <form onSubmit={(e) => { e.preventDefault(); submitGoogleLogin(); }} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-text-muted uppercase">Google Email / Gmail Address</label>
-                <input
-                  type="email"
-                  placeholder="name@gmail.com"
-                  value={customGmail}
-                  onChange={(e) => setCustomGmail(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-black/20 focus:border-brand-primary text-sm text-white placeholder-text-muted outline-none transition-colors"
-                  required
-                />
-              </div>
+            {loginStep === 1 ? (
+              <form onSubmit={handleEmailSubmit} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono font-bold text-text-muted uppercase">Google Email / Gmail Address</label>
+                  <input
+                    type="email"
+                    placeholder="name@gmail.com"
+                    value={customGmail}
+                    onChange={(e) => setCustomGmail(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-black/20 focus:border-brand-primary text-sm text-white placeholder-text-muted outline-none transition-colors"
+                    required
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-text-muted uppercase">Your Full Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. John Doe"
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-black/20 focus:border-brand-primary text-sm text-white placeholder-text-muted outline-none transition-colors"
-                  required
-                />
-              </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setGooglePromptOpen(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 text-white text-xs font-bold cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-brand-primary to-brand-secondary text-black font-extrabold text-xs cursor-pointer hover:scale-[1.02] active:scale-95 transition-all"
+                  >
+                    Next
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleNameSubmit} className="space-y-4">
+                <div className="space-y-2 text-center mb-2">
+                  <p className="text-xs text-white">Welcome!</p>
+                  <p className="text-xs text-text-muted font-mono">{customGmail}</p>
+                </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setGooglePromptOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 text-white text-xs font-bold cursor-pointer transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-brand-primary to-brand-secondary text-black font-extrabold text-xs cursor-pointer hover:scale-[1.02] active:scale-95 transition-all"
-                >
-                  Sign In
-                </button>
-              </div>
-            </form>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono font-bold text-text-muted uppercase">Confirm Your Full Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. John Doe"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-white/10 bg-black/20 focus:border-brand-primary text-sm text-white placeholder-text-muted outline-none transition-colors"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setLoginStep(1)}
+                    className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 text-white text-xs font-bold cursor-pointer transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-brand-primary to-brand-secondary text-black font-extrabold text-xs cursor-pointer hover:scale-[1.02] active:scale-95 transition-all"
+                  >
+                    Sign In
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

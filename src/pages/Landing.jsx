@@ -9,8 +9,11 @@ import {
   ArrowRight, 
   Code, 
   Cpu, 
-  Play 
+  Play,
+  Network
 } from 'lucide-react';
+import { SpotlightCard } from '../components/common/SpotlightCard';
+import { ShinyText } from '../components/common/ShinyText';
 
 export function Landing() {
   const navigate = useNavigate();
@@ -173,6 +176,20 @@ export function Landing() {
       color: 'from-amber-400 to-orange-500'
     },
     {
+      title: 'Tree Visualizer',
+      desc: 'Explore binary search trees (BST). Visualize dynamic insertion, deletion, and inorder, preorder, and postorder traversals with animated waves.',
+      icon: Network,
+      path: '/tree',
+      color: 'from-blue-400 to-indigo-500'
+    },
+    {
+      title: 'Graph Visualizer',
+      desc: 'Understand complex graph network traversals (BFS, DFS, Dijkstra) on an interactive customizable canvas node-link editor.',
+      icon: Network,
+      path: '/graph',
+      color: 'from-indigo-400 to-purple-500'
+    },
+    {
       title: 'Algorithm Race Mode',
       desc: 'Compare two sorting operations side-by-side on identical arrays. Track comparisons, writes, and timers to announce the absolute winner.',
       icon: Zap,
@@ -191,8 +208,8 @@ export function Landing() {
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mb-20 mt-6">
         <div className="lg:col-span-7 space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-panel border border-white/5 text-xs text-brand-primary font-mono tracking-wide">
-            <Cpu className="w-3.5 h-3.5" />
-            NEXUSALGO ENGINE v2.4
+            <Cpu className="w-3.5 h-3.5 text-brand-primary" />
+            <ShinyText text="NEXUSALGO ENGINE v2.4" speed={3.5} />
           </div>
 
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-none text-white">
@@ -254,10 +271,11 @@ export function Landing() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {featureCards.map((card, idx) => (
-            <div 
+            <SpotlightCard 
               key={idx}
               onClick={() => navigate(card.path)}
-              className="glass-panel p-8 rounded-2xl hover:border-brand-primary/30 border border-white/5 transition-all duration-300 group cursor-pointer hover:-translate-y-1.5 shadow-xl hover:shadow-2xl shadow-black relative overflow-hidden"
+              className="p-8 rounded-2xl hover:border-brand-primary/30 border border-white/5 transition-all duration-300 group cursor-pointer hover:-translate-y-1.5 shadow-xl hover:shadow-2xl shadow-black relative overflow-hidden"
+              spotlightColor="0, 242, 254"
             >
               {/* Card top border glow gradient */}
               <div className={`absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r ${card.color} opacity-80`} />
@@ -277,7 +295,7 @@ export function Landing() {
               <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-widest text-brand-primary uppercase opacity-60 group-hover:opacity-100 transition-opacity">
                 Enter Visualizer <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
               </div>
-            </div>
+            </SpotlightCard>
           ))}
         </div>
       </div>

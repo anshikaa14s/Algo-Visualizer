@@ -83,6 +83,40 @@ export function bfs(grid, startNode, endNode) {
   return { visitedNodesInOrder, shortestPath: [] };
 }
 
+// 3. DEPTH-FIRST SEARCH (DFS)
+export function dfs(grid, startNode, endNode) {
+  const visitedNodesInOrder = [];
+  const stack = [startNode];
+  
+  while (stack.length > 0) {
+    const currentNode = stack.pop();
+    
+    if (currentNode.isWall) continue;
+    if (currentNode.isVisited) continue;
+    
+    currentNode.isVisited = true;
+    visitedNodesInOrder.push(currentNode);
+    
+    if (currentNode.row === endNode.row && currentNode.col === endNode.col) {
+      return {
+        visitedNodesInOrder,
+        shortestPath: getNodesInShortestPathOrder(endNode)
+      };
+    }
+    
+    const neighbors = getUnvisitedNeighbors(currentNode, grid);
+    // Push neighbors in reverse order (or normal order) to stack
+    for (const neighbor of neighbors) {
+      if (!neighbor.isVisited) {
+        neighbor.previousNode = currentNode;
+        stack.push(neighbor);
+      }
+    }
+  }
+  
+  return { visitedNodesInOrder, shortestPath: [] };
+}
+
 // HELPERS FOR PATHFINDING
 function getAllNodes(grid) {
   const nodes = [];

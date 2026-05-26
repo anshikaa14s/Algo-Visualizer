@@ -15,7 +15,8 @@ import {
   Palette,
   Network,
   LogIn,
-  LogOut
+  LogOut,
+  GitFork
 } from 'lucide-react';
 
 export function CollapsibleSidebar() {
@@ -28,6 +29,7 @@ export function CollapsibleSidebar() {
     { name: 'Sorting Visualizer', path: '/sorting', icon: BarChart3 },
     { name: 'Searching Visualizer', path: '/searching', icon: Search },
     { name: 'Data Structures', path: '/datastructures', icon: Database },
+    { name: 'Tree Visualizer', path: '/tree', icon: GitFork },
     { name: 'Pathfinding Visualizer', path: '/pathfinding', icon: Grid },
     { name: 'Graph Visualizer', path: '/graph', icon: Network },
     { name: 'Algorithm Race Mode', path: '/race', icon: Zap },

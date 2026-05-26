@@ -11,7 +11,7 @@ import {
   ChevronRight,
   Database
 } from 'lucide-react';
-import { dijkstra, bfs, generateRecursiveDivisionMaze } from '../algorithms/pathfinding';
+import { dijkstra, bfs, dfs, generateRecursiveDivisionMaze } from '../algorithms/pathfinding';
 import { useAudioSynth } from '../hooks/useAudioSynth';
 
 export function PathfindingPage() {
@@ -24,7 +24,7 @@ export function PathfindingPage() {
 
   const [grid, setGrid] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [algorithm, setAlgorithm] = useState('dijkstra'); // dijkstra, bfs
+  const [algorithm, setAlgorithm] = useState('dijkstra'); // dijkstra, bfs, dfs
   const [infoDesc, setInfoDesc] = useState("Draw walls by dragging, relocate start/end pins, and click 'Solve Grid'!");
   const [speed, setSpeed] = useState(40); // delay in ms per search step
   const [codeLine, setCodeLine] = useState(0);
@@ -36,6 +36,7 @@ export function PathfindingPage() {
 
   const { soundEnabled, playTone } = useAudioSynth();
   const timeoutsRef = useRef([]);
+  const gridStatesRef = useRef({}); // Tracks visual states: visited, path, wall, ''
 
   const speedRef = useRef(speed);
   useEffect(() => {
@@ -74,18 +75,49 @@ export function PathfindingPage() {
       "    }",
       "  }",
       "}"
+    ],
+    dfs: [
+      "function DFS(grid, start, end) {",
+      "  let stack = [start];",
+      "  while (stack.length > 0) {",
+      "    let curr = stack.pop();",
+      "    if (curr === end) return buildPath(end);",
+      "    if (!curr.isVisited) {",
+      "      curr.isVisited = true;",
+      "      for (let neighbor of neighbors) {",
+      "        neighbor.previous = curr;",
+      "        stack.push(neighbor);",
+      "      }",
+      "    }",
+      "  }",
+      "}"
     ]
   };
 
   const complexities = {
     dijkstra: { time: "O(V log V + E)", space: "O(V)" },
-    bfs: { time: "O(V + E)", space: "O(V)" }
+    bfs: { time: "O(V + E)", space: "O(V)" },
+    dfs: { time: "O(V + E)", space: "O(V)" }
   };
 
   // Initialize standard grid
   const initializeGrid = (clearAll = true) => {
     clearAllTimeouts();
     setCodeLine(0);
+    if (clearAll) {
+      gridStatesRef.current = {};
+    } else {
+      const newStates = {};
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const key = `${r}-${c}`;
+          if (gridStatesRef.current[key] === 'wall') {
+            newStates[key] = 'wall';
+          }
+        }
+      }
+      gridStatesRef.current = newStates;
+    }
     const newGrid = [];
     for (let r = 0; r < ROWS; r++) {
       const currentRow = [];
@@ -179,6 +211,13 @@ export function PathfindingPage() {
     newGrid[row][col].isWall = !node.isWall;
     setGrid(newGrid);
 
+    const key = `${row}-${col}`;
+    if (newGrid[row][col].isWall) {
+      gridStatesRef.current[key] = 'wall';
+    } else {
+      delete gridStatesRef.current[key];
+    }
+
     // Apply styles instantly via DOM to prevent lagging
     const element = document.getElementById(`node-${row}-${col}`);
     if (element) {
@@ -194,7 +233,13 @@ export function PathfindingPage() {
   const visualizePathfinding = () => {
     if (isPlaying) return;
     setIsPlaying(true);
-    setInfoDesc(`Running ${algorithm === 'dijkstra' ? "Dijkstra's weighted solver..." : "Breadth-First Search queue..."}`);
+    setInfoDesc(`Running ${
+      algorithm === 'dijkstra' 
+        ? "Dijkstra's weighted solver..." 
+        : algorithm === 'bfs' 
+        ? "Breadth-First Search queue..." 
+        : "Depth-First Search stack..."
+    }`);
 
     // Create fresh grid state for solver (resets previous runs while preserving walls)
     const activeGrid = [];
@@ -207,6 +252,11 @@ export function PathfindingPage() {
         node.previousNode = null;
         row.push(node);
         
+        const key = `${r}-${c}`;
+        if (gridStatesRef.current[key] === 'visited' || gridStatesRef.current[key] === 'path') {
+          delete gridStatesRef.current[key];
+        }
+
         // Remove animation styles from previous solvers
         const element = document.getElementById(`node-${r}-${c}`);
         if (element && !node.isStart && !node.isEnd && !node.isWall) {
@@ -222,8 +272,10 @@ export function PathfindingPage() {
     let result;
     if (algorithm === 'dijkstra') {
       result = dijkstra(activeGrid, startNode, endNode);
-    } else {
+    } else if (algorithm === 'bfs') {
       result = bfs(activeGrid, startNode, endNode);
+    } else {
+      result = dfs(activeGrid, startNode, endNode);
     }
 
     const { visitedNodesInOrder, shortestPath } = result;
@@ -240,6 +292,7 @@ export function PathfindingPage() {
     const tId = setTimeout(() => {
       const node = visitedNodes[index];
       if (!node.isStart && !node.isEnd) {
+        gridStatesRef.current[`${node.row}-${node.col}`] = 'visited';
         const element = document.getElementById(`node-${node.row}-${node.col}`);
         if (element) {
           element.classList.add('cell-animation-visited');
@@ -249,7 +302,9 @@ export function PathfindingPage() {
       // Dynamic code line debugger highlights simulation
       const lineOfCode = algorithm === 'dijkstra' 
         ? [3, 4, 5, 8][index % 4] 
-        : [4, 5, 6, 7][index % 4];
+        : algorithm === 'bfs'
+        ? [4, 5, 6, 7][index % 4]
+        : [3, 4, 5, 8][index % 4];
       setCodeLine(lineOfCode);
 
       // Play beeping tones periodically to prevent sound crash
@@ -279,6 +334,7 @@ export function PathfindingPage() {
     const tId = setTimeout(() => {
       const node = path[index];
       if (!node.isStart && !node.isEnd) {
+        gridStatesRef.current[`${node.row}-${node.col}`] = 'path';
         const element = document.getElementById(`node-${node.row}-${node.col}`);
         if (element) {
           element.classList.remove('cell-animation-visited');
@@ -331,6 +387,7 @@ export function PathfindingPage() {
       const tId = setTimeout(() => {
         const { row, col } = wallCoords[i];
         tempGrid[row][col].isWall = true;
+        gridStatesRef.current[`${row}-${col}`] = 'wall';
         
         const element = document.getElementById(`node-${row}-${col}`);
         if (element) {
@@ -375,6 +432,7 @@ export function PathfindingPage() {
               >
                 <option value="dijkstra" className="bg-bg-secondary text-white">Dijkstra's Algorithm</option>
                 <option value="bfs" className="bg-bg-secondary text-white">Breadth-First Search (BFS)</option>
+                <option value="dfs" className="bg-bg-secondary text-white">Depth-First Search (DFS)</option>
               </select>
             </div>
             
@@ -433,16 +491,33 @@ export function PathfindingPage() {
           <div className="grid gap-[2px] bg-white/5 border border-white/10 p-[2px] rounded-xl min-w-[700px]">
             {grid.map((row, rIdx) => (
               <div key={rIdx} className="flex gap-[2px]">
-                {row.map((node, cIdx) => (
-                  <div
-                    key={`${rIdx}-${cIdx}`}
-                    id={`node-${rIdx}-${cIdx}`}
-                    onMouseDown={() => handleMouseDown(rIdx, cIdx)}
-                    onMouseEnter={() => handleMouseEnter(rIdx, cIdx)}
-                    className="w-full aspect-square border border-white/5 rounded-xs transition-all duration-300 bg-black/20"
-                    title={`Coords: (${rIdx}, ${cIdx})`}
-                  />
-                ))}
+                {row.map((node, cIdx) => {
+                  const key = `${rIdx}-${cIdx}`;
+                  const state = gridStatesRef.current[key];
+                  let extraClasses = 'bg-black/20';
+                  if (node.isStart) {
+                    extraClasses = 'bg-emerald-500 shadow-md shadow-emerald-500/50';
+                  } else if (node.isEnd) {
+                    extraClasses = 'bg-rose-500 shadow-md shadow-rose-500/50';
+                  } else if (state === 'wall' || node.isWall) {
+                    extraClasses = 'bg-slate-700 border-slate-600 shadow-sm';
+                  } else if (state === 'path') {
+                    extraClasses = 'cell-animation-path';
+                  } else if (state === 'visited') {
+                    extraClasses = 'cell-animation-visited';
+                  }
+
+                  return (
+                    <div
+                      key={`${rIdx}-${cIdx}`}
+                      id={`node-${rIdx}-${cIdx}`}
+                      onMouseDown={() => handleMouseDown(rIdx, cIdx)}
+                      onMouseEnter={() => handleMouseEnter(rIdx, cIdx)}
+                      className={`w-full aspect-square border border-white/5 rounded-xs transition-all duration-300 ${extraClasses}`}
+                      title={`Coords: (${rIdx}, ${cIdx})`}
+                    />
+                  );
+                })}
               </div>
             ))}
           </div>
@@ -553,18 +628,25 @@ export function PathfindingPage() {
             </div>
 
             {/* Algorithm info boxes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-black/15 text-xs leading-relaxed font-sans text-text-muted space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-black/15 text-xs leading-relaxed font-sans text-text-muted space-y-1">
                 <h4 className="font-bold text-white uppercase text-[10px] tracking-wide text-brand-primary">Dijkstra's Algorithm</h4>
-                <p>
-                  A weighted search algorithm that explores coordinates by prioritizing elements with the absolute shortest distance from source. Treats wall cells as infinity weight. Finds the shortest path.
+                <p className="text-[11px]">
+                  A weighted search algorithm prioritizing the shortest path from start. Treats wall cells as infinite weight.
                 </p>
               </div>
 
-              <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-black/15 text-xs leading-relaxed font-sans text-text-muted space-y-2">
-                <h4 className="font-bold text-white uppercase text-[10px] tracking-wide text-brand-secondary">Breadth-First Search (BFS)</h4>
-                <p>
-                  An unweighted search algorithm that explores grid cells layer-by-layer uniformly outwards using a queue. Guarantees finding the absolute shortest path on unweighted grids.
+              <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-black/15 text-xs leading-relaxed font-sans text-text-muted space-y-1">
+                <h4 className="font-bold text-white uppercase text-[10px] tracking-wide text-brand-secondary">Breadth-First Search</h4>
+                <p className="text-[11px]">
+                  An unweighted layer-by-layer queue search. Guarantees finding the shortest path on grid layouts.
+                </p>
+              </div>
+
+              <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-black/15 text-xs leading-relaxed font-sans text-text-muted space-y-1">
+                <h4 className="font-bold text-white uppercase text-[10px] tracking-wide text-yellow-400">Depth-First Search</h4>
+                <p className="text-[11px]">
+                  An unweighted stack-based search exploring deeply along each branch. Does not guarantee the shortest path.
                 </p>
               </div>
             </div>

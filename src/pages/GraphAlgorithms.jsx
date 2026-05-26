@@ -14,19 +14,30 @@ import {
   Plus
 } from 'lucide-react';
 
+// Spreadsheet-style node label helper (A, B, C... Z, AA, AB...)
+const getDefaultLabel = (id) => {
+  let label = '';
+  let temp = id;
+  while (temp >= 0) {
+    label = String.fromCharCode(65 + (temp % 26)) + label;
+    temp = Math.floor(temp / 26) - 1;
+  }
+  return label;
+};
+
 export function GraphAlgorithms() {
   const { soundEnabled } = useApp();
   const audioCtxRef = useRef(null);
 
-  // Graph state: node = { id, x, y, status } (status: normal, active, visited, queue, path)
+  // Graph state: node = { id, x, y, status, label } (status: normal, active, visited, queue, path)
   // edge = { from, to, isPath }
   const [nodes, setNodes] = useState([
-    { id: 0, x: 150, y: 150, status: 'normal' },
-    { id: 1, x: 300, y: 100, status: 'normal' },
-    { id: 2, x: 300, y: 250, status: 'normal' },
-    { id: 3, x: 450, y: 150, status: 'normal' },
-    { id: 4, x: 450, y: 280, status: 'normal' },
-    { id: 5, x: 600, y: 200, status: 'normal' }
+    { id: 0, x: 150, y: 150, status: 'normal', label: 'A' },
+    { id: 1, x: 300, y: 100, status: 'normal', label: 'B' },
+    { id: 2, x: 300, y: 250, status: 'normal', label: 'C' },
+    { id: 3, x: 450, y: 150, status: 'normal', label: 'D' },
+    { id: 4, x: 450, y: 280, status: 'normal', label: 'E' },
+    { id: 5, x: 600, y: 200, status: 'normal', label: 'F' }
   ]);
 
   const [edges, setEdges] = useState([
@@ -55,6 +66,11 @@ export function GraphAlgorithms() {
   const [stepLog, setStepLog] = useState(["Double click canvas to add nodes. Click one then another to form links."]);
   const [codeLine, setCodeLine] = useState(0);
   const [comparisons, setComparisons] = useState(0);
+
+  const getNodeLabel = useCallback((id) => {
+    const node = nodes.find(n => n.id === id);
+    return node ? (node.label || id.toString()) : id.toString();
+  }, [nodes]);
 
   // Interaction refs
   const svgRef = useRef(null);
@@ -118,7 +134,8 @@ export function GraphAlgorithms() {
           id: i,
           x: cx + radius * Math.cos(angle),
           y: cy + radius * Math.sin(angle),
-          status: 'normal'
+          status: 'normal',
+          label: getDefaultLabel(i)
         });
         ringEdges.push({
           from: i,
@@ -141,7 +158,8 @@ export function GraphAlgorithms() {
             id,
             x: 180 + c * 180,
             y: 120 + r * 160,
-            status: 'normal'
+            status: 'normal',
+            label: getDefaultLabel(id)
           });
           id++;
         }
@@ -162,7 +180,7 @@ export function GraphAlgorithms() {
     } else {
       // Star Graph
       const starNodes = [
-        { id: 0, x: 350, y: 200, status: 'normal' } // Hub
+        { id: 0, x: 350, y: 200, status: 'normal', label: 'A' } // Hub
       ];
       const starEdges = [];
       for (let i = 1; i <= 5; i++) {
@@ -171,7 +189,8 @@ export function GraphAlgorithms() {
           id: i,
           x: 350 + 130 * Math.cos(angle),
           y: 200 + 130 * Math.sin(angle),
-          status: 'normal'
+          status: 'normal',
+          label: getDefaultLabel(i)
         });
         starEdges.push({ from: 0, to: i, isPath: false });
       }
@@ -200,7 +219,8 @@ export function GraphAlgorithms() {
         id: i,
         x: Math.max(40, Math.min(650, x)),
         y: Math.max(40, Math.min(320, y)),
-        status: 'normal'
+        status: 'normal',
+        label: getDefaultLabel(i)
       });
     }
 
@@ -234,7 +254,7 @@ export function GraphAlgorithms() {
     const y = 100 + Math.random() * 200;
 
     setNodes(prev => {
-      const newNodes = [...prev, { id: nextId, x, y, status: 'normal' }];
+      const newNodes = [...prev, { id: nextId, x, y, status: 'normal', label: getDefaultLabel(nextId) }];
       if (prev.length === 0) {
         setStartNode(nextId);
       } else if (prev.length === 1) {
@@ -268,7 +288,7 @@ export function GraphAlgorithms() {
 
     setNodes(prev => {
       const nextId = prev.length > 0 ? Math.max(...prev.map(n => n.id)) + 1 : 0;
-      return [...prev, { id: nextId, x, y, status: 'normal' }];
+      return [...prev, { id: nextId, x, y, status: 'normal', label: getDefaultLabel(nextId) }];
     });
   };
 
@@ -301,14 +321,14 @@ export function GraphAlgorithms() {
     if (e.shiftKey) {
       resetVisuals();
       setStartNode(nodeId);
-      setStepLog(prev => [...prev, `Set Node ${nodeId} as the Start Node.`]);
+      setStepLog(prev => [...prev, `Set Node ${getNodeLabel(nodeId)} as the Start Node.`]);
       return;
     }
     // Ctrl or Cmd click to set Target node
     if (e.ctrlKey || e.metaKey) {
       resetVisuals();
       setTargetNode(nodeId);
-      setStepLog(prev => [...prev, `Set Node ${nodeId} as the Target Node.`]);
+      setStepLog(prev => [...prev, `Set Node ${getNodeLabel(nodeId)} as the Target Node.`]);
       return;
     }
 
@@ -363,18 +383,18 @@ export function GraphAlgorithms() {
     let parentMap = {};
     
     setVisited(new Set([startNode]));
-    setFringe([...q]);
+    setFringe(q.map(id => getNodeLabel(id)));
     
-    yield { line: 2, desc: `Initialize Queue with starting Node ${startNode}.`, nodeUpdates: { [startNode]: 'queue' } };
+    yield { line: 2, desc: `Initialize Queue with starting Node ${getNodeLabel(startNode)}.`, nodeUpdates: { [startNode]: 'queue' } };
 
     while (q.length > 0) {
       let curr = q.shift();
-      setFringe([...q]);
+      setFringe(q.map(id => getNodeLabel(id)));
       playTone(curr);
       
       yield { 
         line: 5, 
-        desc: `Dequeue Node ${curr} from Queue and inspect neighbors.`, 
+        desc: `Dequeue Node ${getNodeLabel(curr)} from Queue and inspect neighbors.`, 
         nodeUpdates: { [curr]: 'active' } 
       };
 
@@ -395,7 +415,7 @@ export function GraphAlgorithms() {
 
         yield {
           line: 6,
-          desc: `Shortest Path Found! Tracing links from ${startNode} to ${targetNode}.`,
+          desc: `Shortest Path Found! Tracing links from ${getNodeLabel(startNode)} to ${getNodeLabel(targetNode)}.`,
           nodeUpdates: pathNodes.reduce((acc, nid) => ({ ...acc, [nid]: 'path' }), {}),
           pathEdges
         };
@@ -415,24 +435,24 @@ export function GraphAlgorithms() {
         q.push(n);
         
         setVisited(new Set(visitedSet));
-        setFringe([...q]);
+        setFringe(q.map(id => getNodeLabel(id)));
         setParents({ ...parentMap });
 
         yield {
           line: 9,
-          desc: `Discovered neighbor Node ${n}. Add to Queue & set parent to ${curr}.`,
+          desc: `Discovered neighbor Node ${getNodeLabel(n)}. Add to Queue & set parent to ${getNodeLabel(curr)}.`,
           nodeUpdates: { [n]: 'queue', [curr]: 'visited' }
         };
       }
       
       yield {
         line: 12,
-        desc: `Processed all neighbors of Node ${curr}. Mark Node ${curr} as Visited.`,
+        desc: `Processed all neighbors of Node ${getNodeLabel(curr)}. Mark Node ${getNodeLabel(curr)} as Visited.`,
         nodeUpdates: { [curr]: 'visited' }
       };
     }
 
-    yield { line: 14, desc: `Queue exhausted. No path found between ${startNode} and ${targetNode}.`, nodeUpdates: {} };
+    yield { line: 14, desc: `Queue exhausted. No path found between ${getNodeLabel(startNode)} and ${getNodeLabel(targetNode)}.`, nodeUpdates: {} };
   }
 
   // DFS algorithm generator
@@ -441,13 +461,13 @@ export function GraphAlgorithms() {
     let visitedSet = new Set();
     let parentMap = {};
     
-    setFringe([...stack]);
+    setFringe(stack.map(id => getNodeLabel(id)));
     
-    yield { line: 2, desc: `Push starting Node ${startNode} onto stack.`, nodeUpdates: { [startNode]: 'queue' } };
+    yield { line: 2, desc: `Push starting Node ${getNodeLabel(startNode)} onto stack.`, nodeUpdates: { [startNode]: 'queue' } };
 
     while (stack.length > 0) {
       let curr = stack.pop();
-      setFringe([...stack]);
+      setFringe(stack.map(id => getNodeLabel(id)));
       
       if (visitedSet.has(curr)) continue;
       
@@ -457,7 +477,7 @@ export function GraphAlgorithms() {
 
       yield { 
         line: 5, 
-        desc: `Pop Node ${curr} from Stack. Mark as Visited and check links.`, 
+        desc: `Pop Node ${getNodeLabel(curr)} from Stack. Mark as Visited and check links.`, 
         nodeUpdates: { [curr]: 'active' } 
       };
 
@@ -476,7 +496,7 @@ export function GraphAlgorithms() {
 
         yield {
           line: 8,
-          desc: `DFS Path reached target Node ${targetNode}! Tracing final route.`,
+          desc: `DFS Path reached target Node ${getNodeLabel(targetNode)}! Tracing final route.`,
           nodeUpdates: pathNodes.reduce((acc, nid) => ({ ...acc, [nid]: 'path' }), {}),
           pathEdges
         };
@@ -495,12 +515,12 @@ export function GraphAlgorithms() {
           parentMap[n] = curr;
           stack.push(n);
           
-          setFringe([...stack]);
+          setFringe(stack.map(id => getNodeLabel(id)));
           setParents({ ...parentMap });
 
           yield {
             line: 10,
-            desc: `Link Node ${n} discovered. Push to Stack and link parent: ${curr}.`,
+            desc: `Link Node ${getNodeLabel(n)} discovered. Push to Stack and link parent: ${getNodeLabel(curr)}.`,
             nodeUpdates: { [n]: 'queue', [curr]: 'visited' }
           };
         }
@@ -508,12 +528,12 @@ export function GraphAlgorithms() {
 
       yield {
         line: 12,
-        desc: `Mark Node ${curr} visited. Stack state: [${stack.join(', ')}].`,
+        desc: `Mark Node ${getNodeLabel(curr)} visited. Stack state: [${stack.map(id => getNodeLabel(id)).join(', ')}].`,
         nodeUpdates: { [curr]: 'visited' }
       };
     }
 
-    yield { line: 14, desc: `Stack empty. Target Node unreachable from ${startNode}.`, nodeUpdates: {} };
+    yield { line: 14, desc: `Stack empty. Target Node unreachable from ${getNodeLabel(startNode)}.`, nodeUpdates: {} };
   }
 
   // Dijkstra's algorithm generator
@@ -524,9 +544,9 @@ export function GraphAlgorithms() {
     let visitedSet = new Set();
 
     setDistances({ ...distMap });
-    setFringe(pq.map(item => `${item.node}(d=${item.dist})`));
+    setFringe(pq.map(item => `${getNodeLabel(item.node)}(d=${item.dist})`));
 
-    yield { line: 3, desc: `Initialize starting distance map. Set distance to Node ${startNode} to 0.`, nodeUpdates: { [startNode]: 'queue' } };
+    yield { line: 3, desc: `Initialize starting distance map. Set distance to Node ${getNodeLabel(startNode)} to 0.`, nodeUpdates: { [startNode]: 'queue' } };
 
     while (pq.length > 0) {
       // Sort to simulate Min-Priority Queue
@@ -534,7 +554,7 @@ export function GraphAlgorithms() {
       let currItem = pq.shift();
       let curr = currItem.node;
       
-      setFringe(pq.map(item => `${item.node}(d=${item.dist})`));
+      setFringe(pq.map(item => `${getNodeLabel(item.node)}(d=${item.dist})`));
 
       if (visitedSet.has(curr)) continue;
       
@@ -544,7 +564,7 @@ export function GraphAlgorithms() {
 
       yield {
         line: 5,
-        desc: `Extract Node ${curr} with minimum distance (${currItem.dist}) from Heap.`,
+        desc: `Extract Node ${getNodeLabel(curr)} with minimum distance (${currItem.dist}) from Heap.`,
         nodeUpdates: { [curr]: 'active' }
       };
 
@@ -588,11 +608,11 @@ export function GraphAlgorithms() {
 
           setDistances({ ...distMap });
           setParents({ ...parentMap });
-          setFringe(pq.map(item => `${item.node}(d=${item.dist})`));
+          setFringe(pq.map(item => `${getNodeLabel(item.node)}(d=${item.dist})`));
 
           yield {
             line: 10,
-            desc: `Relax edge ${curr} ➜ ${n}. Distance decreases to ${newDist}.`,
+            desc: `Relax edge ${getNodeLabel(curr)} ➜ ${getNodeLabel(n)}. Distance decreases to ${newDist}.`,
             nodeUpdates: { [n]: 'queue', [curr]: 'visited' }
           };
         }
@@ -600,12 +620,12 @@ export function GraphAlgorithms() {
 
       yield {
         line: 13,
-        desc: `Completed exploration of Node ${curr}. Distances: [${Object.entries(distMap).map(([k, v]) => `${k}:${v}`).join(', ')}].`,
+        desc: `Completed exploration of Node ${getNodeLabel(curr)}. Distances: [${Object.entries(distMap).map(([k, v]) => `${getNodeLabel(parseInt(k))}:${v}`).join(', ')}].`,
         nodeUpdates: { [curr]: 'visited' }
       };
     }
 
-    yield { line: 15, desc: `Min-Heap empty. Dijkstra reports target ${targetNode} is unreachable.`, nodeUpdates: {} };
+    yield { line: 15, desc: `Min-Heap empty. Dijkstra reports target ${getNodeLabel(targetNode)} is unreachable.`, nodeUpdates: {} };
   }
 
   const scheduleNextStep = () => {
@@ -978,7 +998,7 @@ export function GraphAlgorithms() {
                     fill="white"
                     className="text-xs font-mono font-bold select-none pointer-events-none"
                   >
-                    {node.id}
+                    {node.label !== undefined ? node.label : node.id}
                   </text>
                 </g>
               );
@@ -991,9 +1011,9 @@ export function GraphAlgorithms() {
       <div className="w-full lg:w-[480px] p-6 flex flex-col gap-6 overflow-y-auto max-h-full no-scrollbar">
         {/* Selected Node Action dashboard */}
         {selectedNode !== null && (
-          <div className="glass-panel p-4 rounded-2xl border border-[#f59e0b]/30 bg-[#f59e0b]/5 space-y-3 animate-pulse">
+          <div className="glass-panel p-4 rounded-2xl border border-[#f59e0b]/30 bg-[#f59e0b]/5 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#f59e0b] uppercase font-mono tracking-wider">Node {selectedNode} Selected</span>
+              <span className="text-xs font-bold text-[#f59e0b] uppercase font-mono tracking-wider">Node {getNodeLabel(selectedNode)} Selected</span>
               <button 
                 onClick={() => setSelectedNode(null)}
                 className="text-[10px] text-text-muted hover:text-white underline cursor-pointer"
@@ -1001,7 +1021,26 @@ export function GraphAlgorithms() {
                 Deselect
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            
+            {/* Rename Node input */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] text-text-muted font-mono uppercase font-bold">Rename Node</span>
+              <input
+                type="text"
+                value={nodes.find(n => n.id === selectedNode)?.label || ''}
+                onChange={(e) => {
+                  const newLabel = e.target.value;
+                  setNodes(prev => prev.map(n => 
+                    n.id === selectedNode ? { ...n, label: newLabel } : n
+                  ));
+                }}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white outline-none focus:border-[#f59e0b]/50"
+                placeholder="Enter node label..."
+                maxLength={8}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-1">
               <button
                 onClick={() => {
                   setStartNode(selectedNode);
@@ -1061,26 +1100,26 @@ export function GraphAlgorithms() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <span className="text-[10px] font-mono font-bold text-text-muted uppercase">Start Node ID</span>
+              <span className="text-[10px] font-mono font-bold text-text-muted uppercase">Start Node</span>
               <select
                 value={startNode}
                 onChange={(e) => { setStartNode(parseInt(e.target.value)); resetVisuals(); }}
                 className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-brand-primary/50"
               >
                 {nodes.map(n => (
-                  <option key={n.id} value={n.id}>Node {n.id}</option>
+                  <option key={n.id} value={n.id}>Node {n.label !== undefined ? n.label : n.id}</option>
                 ))}
               </select>
             </div>
             <div className="space-y-1.5">
-              <span className="text-[10px] font-mono font-bold text-text-muted uppercase">Target Node ID</span>
+              <span className="text-[10px] font-mono font-bold text-text-muted uppercase">Target Node</span>
               <select
                 value={targetNode}
                 onChange={(e) => { setTargetNode(parseInt(e.target.value)); resetVisuals(); }}
                 className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-brand-primary/50"
               >
                 {nodes.map(n => (
-                  <option key={n.id} value={n.id}>Node {n.id}</option>
+                  <option key={n.id} value={n.id}>Node {n.label !== undefined ? n.label : n.id}</option>
                 ))}
               </select>
             </div>

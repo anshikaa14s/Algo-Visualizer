@@ -12,6 +12,7 @@ import { PathfindingPage } from './pages/PathfindingPage';
 import { RaceModePage } from './pages/RaceModePage';
 import { LoginPage } from './pages/LoginPage';
 import { GraphAlgorithms } from './pages/GraphAlgorithms';
+import { TreePage } from './pages/TreePage';
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/race" element={<RaceModePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/graph" element={<GraphAlgorithms />} />
+              <Route path="/tree" element={<TreePage />} />
             </Routes>
           </main>
         </div>

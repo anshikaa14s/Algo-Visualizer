@@ -17,6 +17,7 @@ export function SearchingPage() {
   const [target, setTarget] = useState(45);
   const [speed, setSpeed] = useState(250); // ms per step
   const [isPlaying, setIsPlaying] = useState(false);
+  const [customInput, setCustomInput] = useState('');
   
   // Search visual states
   const [activeIdx, setActiveIdx] = useState(null);
@@ -35,15 +36,14 @@ export function SearchingPage() {
 
   const { soundEnabled, playTone } = useAudioSynth();
 
-  const size = 16; // fixed size for neat layout
+  const [arraySize, setArraySize] = useState(16);
 
-  // Generate a random array
   const generateNewArray = useCallback(() => {
     let newArray = [];
     const minVal = 10;
     const maxVal = 99;
     
-    for (let i = 0; i < size; i++) {
+    for (let i = 0; i < arraySize; i++) {
       newArray.push(Math.floor(Math.random() * (maxVal - minVal + 1)) + minVal);
     }
 
@@ -57,7 +57,7 @@ export function SearchingPage() {
     // Pick a random target from the array, or random value
     const shouldExist = Math.random() < 0.8;
     if (shouldExist) {
-      const idx = Math.floor(Math.random() * size);
+      const idx = Math.floor(Math.random() * arraySize);
       setTarget(newArray[idx]);
     } else {
       setTarget(Math.floor(Math.random() * 80) + 15);
@@ -70,7 +70,7 @@ export function SearchingPage() {
     setLowBoundary(null);
     setHighBoundary(null);
     setComparisons(0);
-    setStepDesc(`Generated an array of ${size} elements. Click 'Start Search' to find target.`);
+    setStepDesc(`Generated an array of ${arraySize} elements. Click 'Start Search' to find target.`);
     setCodeLine(0);
     setIsPlaying(false);
     generatorRef.current = null;
@@ -78,7 +78,7 @@ export function SearchingPage() {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  }, [searchMethod]);
+  }, [searchMethod, arraySize]);
 
   // Regenerate when method toggles
   useEffect(() => {
@@ -362,12 +362,57 @@ export function SearchingPage() {
               </button>
             </div>
 
+            {/* Custom Array Input */}
+            <div className="glass-panel p-4 rounded-2xl border border-white/5 bg-black/15 flex flex-col gap-2">
+              <span className="text-[10px] text-text-muted font-mono uppercase tracking-wider font-semibold">Custom Array Input</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. 23, 45, 12, 89, 70"
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  disabled={isPlaying}
+                  className="flex-1 bg-bg-secondary border border-white/5 px-3 py-2 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-brand-primary"
+                />
+                <button
+                  onClick={() => {
+                    if (!customInput) return;
+                    let parsed = customInput.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x));
+                    if (parsed.length > 0) {
+                      if (searchMethod === 'binary') {
+                        parsed.sort((x, y) => x - y);
+                        setStepDesc(`Loaded custom array of ${parsed.length} elements (automatically sorted for Binary Search).`);
+                      } else {
+                        setStepDesc(`Loaded custom array of ${parsed.length} elements.`);
+                      }
+                      setArray(parsed);
+                      arrayRef.current = parsed;
+                      setArraySize(parsed.length);
+                      setActiveIdx(null);
+                      setFoundIdx(null);
+                      setCheckedIdxs([]);
+                      setLowBoundary(null);
+                      setHighBoundary(null);
+                      setComparisons(0);
+                      setCodeLine(0);
+                      setIsPlaying(false);
+                      generatorRef.current = null;
+                    }
+                  }}
+                  disabled={isPlaying}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-primary to-brand-secondary text-black font-extrabold text-xs cursor-pointer hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+
             {/* Target helper generator */}
             <div className="flex gap-3">
               <button
                 onClick={() => {
                   // pick a number that exists inside array
-                  const idx = Math.floor(Math.random() * size);
+                  const idx = Math.floor(Math.random() * arraySize);
                   setTarget(array[idx]);
                   generateNewArray();
                 }}

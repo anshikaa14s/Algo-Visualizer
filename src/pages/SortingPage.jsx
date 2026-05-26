@@ -25,6 +25,7 @@ export function SortingPage() {
   const [arraySize, setArraySize] = useState(35);
   const [speed, setSpeed] = useState(300); // ms per step
   const [isPlaying, setIsPlaying] = useState(false);
+  const [customInput, setCustomInput] = useState('');
   
   // Highlighting states
   const [compared, setCompared] = useState([]);
@@ -371,11 +372,18 @@ export function SortingPage() {
                   className="flex flex-col items-center justify-end h-full flex-1 max-w-[30px] group relative"
                 >
                   {/* Numerical Value Label above the bar */}
-                  {arraySize <= 35 && (
-                    <span className="text-[9px] font-mono font-bold text-white mb-1 select-none animate-fade-in opacity-80 group-hover:opacity-100 transition-opacity">
-                      {val}
-                    </span>
-                  )}
+                  <span 
+                    style={{ 
+                      bottom: `calc(${heightPct} + 2px)`,
+                      transform: arraySize <= 35 ? 'translateX(-50%)' : 'translateX(-50%) rotate(-90deg) translateY(-4px)',
+                      transformOrigin: 'left center'
+                    }}
+                    className={`absolute left-1/2 font-mono font-bold text-white select-none animate-fade-in transition-all z-10 ${
+                      arraySize <= 35 ? 'text-[9px] opacity-80' : 'text-[7px] opacity-70 whitespace-nowrap'
+                    }`}
+                  >
+                    {val}
+                  </span>
 
                   {/* The Graphic Bar element */}
                   <div
@@ -442,6 +450,45 @@ export function SortingPage() {
               >
                 <RotateCcw className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Custom array input */}
+            <div className="glass-panel p-4 rounded-2xl border border-white/5 bg-black/15 flex flex-col gap-2">
+              <span className="text-[10px] text-text-muted font-mono uppercase tracking-wider font-semibold">Custom Array Input</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. 45, 12, 89, 3, 27"
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  disabled={isPlaying}
+                  className="flex-1 bg-bg-secondary border border-white/5 px-3 py-2 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-brand-primary"
+                />
+                <button
+                  onClick={() => {
+                    if (!customInput) return;
+                    const parsed = customInput.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x));
+                    if (parsed.length > 0) {
+                      setArray(parsed);
+                      arrayRef.current = parsed;
+                      setArraySize(parsed.length);
+                      // Reset highlights and states
+                      setCompared([]);
+                      setSwapped([]);
+                      setActive([]);
+                      setSorted([]);
+                      setStats({ comparisons: 0, swaps: 0 });
+                      setStepDesc(`Loaded custom array of ${parsed.length} elements.`);
+                      setIsPlaying(false);
+                      generatorRef.current = null;
+                    }
+                  }}
+                  disabled={isPlaying}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-primary to-brand-secondary text-black font-extrabold text-xs cursor-pointer hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                >
+                  Apply
+                </button>
+              </div>
             </div>
 
             {/* Dynamic statistics card */}

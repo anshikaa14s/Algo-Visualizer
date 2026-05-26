@@ -24,6 +24,7 @@ export function DataStructures() {
   // Operational states
   const [nodeValue, setNodeValue] = useState(50);
   const [insertIndex, setInsertIndex] = useState(1);
+  const [customInput, setCustomInput] = useState('');
   const [infoDesc, setInfoDesc] = useState("Perform operations to see data structures manipulate pointers.");
 
   // STACK OPERATIONS
@@ -328,6 +329,42 @@ export function DataStructures() {
                   onChange={(e) => setNodeValue(Math.min(99, Math.max(1, Number(e.target.value))))}
                   className="bg-bg-secondary border border-white/5 px-3 py-2 rounded-xl text-white font-mono text-sm mt-1 focus:outline-none focus:border-brand-primary"
                 />
+              </div>
+
+              {/* Custom list input */}
+              <div className="flex flex-col">
+                <label className="text-[10px] text-text-muted font-mono uppercase">Custom Sequence Input</label>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="text"
+                    placeholder="e.g. 12, 45, 67, 34"
+                    value={customInput}
+                    onChange={(e) => setCustomInput(e.target.value)}
+                    className="flex-1 bg-bg-secondary border border-white/5 px-3 py-2 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-brand-primary"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!customInput) return;
+                      const parsed = customInput.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x));
+                      if (parsed.length > 0) {
+                        const limited = parsed.slice(0, 6);
+                        if (activeTab === 'stack') {
+                          setStack(limited);
+                          setInfoDesc(`Set stack with custom values: ${limited.join(', ')}.`);
+                        } else if (activeTab === 'queue') {
+                          setQueue(limited);
+                          setInfoDesc(`Set queue with custom values: ${limited.join(', ')}.`);
+                        } else if (activeTab === 'linkedlist') {
+                          setLinkedList(limited.map((val, idx) => ({ id: Date.now() + idx, val })));
+                          setInfoDesc(`Set linked list with custom values: ${limited.join(', ')}.`);
+                        }
+                      }
+                    }}
+                    className="px-3 py-2 rounded-xl bg-brand-primary text-black font-bold text-xs cursor-pointer hover:bg-brand-primary/80 transition-colors"
+                  >
+                    Set
+                  </button>
+                </div>
               </div>
 
               {/* Action buttons stack */}

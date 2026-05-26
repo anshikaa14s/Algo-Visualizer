@@ -25,7 +25,7 @@ const createNode = (val) => ({
   y: 0
 });
 
-// Recursively calculates node coordinates
+// Recursively calculates node coordinates for visual rendering
 const calculateLayout = (node, x = 350, y = 60, level = 0, spacingX = 140, spacingY = 65) => {
   if (!node) return null;
   node.x = x;
@@ -84,7 +84,7 @@ export function TreePage() {
   const [speed, setSpeed] = useState(700); // ms per step
   const [codeLine, setCodeLine] = useState(0);
   const [infoDesc, setInfoDesc] = useState("Insert numbers (1-99) into the BST, select a traversal type, and press 'Run Traversal'!");
-  const [stepLog, setStepLog] = useState(["Double click canvas is disabled. Use the panels to manage BST nodes."]);
+  const [stepLog, setStepLog] = useState(["Workspace initialized. Ready for operations."]);
   const [traversalOutput, setTraversalOutput] = useState([]);
   
   const { soundEnabled, playTone } = useAudioSynth();
@@ -101,7 +101,6 @@ export function TreePage() {
   };
 
   useEffect(() => {
-    // Generate a default balanced tree preset on mount
     generatePreset();
     return () => clearAllTimeouts();
   }, []);
@@ -158,7 +157,7 @@ export function TreePage() {
     setStepLog(["Tree preset loaded. Ready for traversal."]);
   };
 
-  // BST operations
+  // BST operations with path tracking animations
   const handleInsert = () => {
     const val = parseInt(inputValue);
     if (isNaN(val) || val < 1 || val > 99) {
@@ -166,98 +165,239 @@ export function TreePage() {
       return;
     }
 
-    handleResetVisuals();
+    // Check if duplicate
+    const checkDuplicate = (node) => {
+      if (!node) return false;
+      if (val === node.value) return true;
+      return val < node.value ? checkDuplicate(node.left) : checkDuplicate(node.right);
+    };
+    if (checkDuplicate(treeRoot)) {
+      setInfoDesc("⚠️ Value already exists in the BST!");
+      return;
+    }
 
-    const insertHelper = (currNode, value) => {
-      if (!currNode) return { node: createNode(value), success: true };
+    // Check depth
+    const rootCloneForDepth = cloneTree(treeRoot);
+    const insertBSTHelper = (currNode, value) => {
+      if (!currNode) return createNode(value);
       if (value < currNode.value) {
-        const res = insertHelper(currNode.left, value);
-        if (!res.success) return res;
-        currNode.left = res.node;
+        currNode.left = insertBSTHelper(currNode.left, value);
       } else if (value > currNode.value) {
-        const res = insertHelper(currNode.right, value);
-        if (!res.success) return res;
-        currNode.right = res.node;
-      } else {
-        return { node: currNode, success: false, error: "Value already exists in the BST!" };
+        currNode.right = insertBSTHelper(currNode.right, value);
       }
-      return { node: currNode, success: true };
+      return currNode;
+    };
+    const testNode = insertBSTHelper(rootCloneForDepth, val);
+    if (getTreeDepth(testNode) > 5) {
+      setInfoDesc("⚠️ Tree depth limit exceeded (max 5 levels)! Please keep the tree balanced.");
+      return;
+    }
+
+    handleResetVisuals();
+    setIsPlaying(true);
+    setInfoDesc(`Finding insertion point for node ${val}...`);
+
+    // Trace the path of insertion
+    const insertPath = [];
+    const getInsertPath = (node) => {
+      if (!node) return;
+      insertPath.push(node.value);
+      if (val < node.value) {
+        if (!node.left) return;
+        getInsertPath(node.left);
+      } else if (val > node.value) {
+        if (!node.right) return;
+        getInsertPath(node.right);
+      }
+    };
+    getInsertPath(treeRoot);
+
+    const animateInsertion = (pathIndex = 0) => {
+      if (pathIndex === insertPath.length) {
+        // Perform final insertion
+        const rootClone = cloneTree(treeRoot);
+        const res = insertBSTHelper(rootClone, val);
+        calculateLayout(res);
+        
+        // Reset status for all except the newly inserted node
+        const resetNodeStatus = (n) => {
+          if (!n) return;
+          n.status = n.value === val ? 'target' : 'normal';
+          resetNodeStatus(n.left);
+          resetNodeStatus(n.right);
+        };
+        resetNodeStatus(res);
+
+        setTreeRoot(res);
+        setIsPlaying(false);
+        setInputValue('');
+        setInfoDesc(`🎉 Successfully inserted node ${val} at its correct position.`);
+        setStepLog(prev => [...prev, `Inserted Node ${val}`]);
+        return;
+      }
+
+      const tId = setTimeout(() => {
+        const currentInspectVal = insertPath[pathIndex];
+        
+        setTreeRoot(prev => {
+          const rootCopy = cloneTree(prev);
+          const updateStatus = (n) => {
+            if (!n) return;
+            if (n.value === currentInspectVal) {
+              n.status = 'active';
+            } else if (insertPath.slice(0, pathIndex).includes(n.value)) {
+              n.status = 'visited';
+            } else {
+              n.status = 'normal';
+            }
+            updateStatus(n.left);
+            updateStatus(n.right);
+          };
+          updateStatus(rootCopy);
+          return rootCopy;
+        });
+
+        playTone(currentInspectVal, 100);
+        setStepLog(prev => [
+          ...prev, 
+          `Compare ${val} with Node ${currentInspectVal}: ${val} ${val < currentInspectVal ? '<' : '>'} ${currentInspectVal}. Go ${val < currentInspectVal ? 'Left ↙' : 'Right ↘'}`
+        ]);
+        animateInsertion(pathIndex + 1);
+      }, speedRef.current);
+      timeoutsRef.current.push(tId);
     };
 
-    const rootClone = cloneTree(treeRoot);
-    const result = insertHelper(rootClone, val);
-    
-    if (!result.success) {
-      setInfoDesc(`⚠️ ${result.error}`);
-      return;
+    if (insertPath.length > 0) {
+      animateInsertion(0);
+    } else {
+      // Tree is empty, insert root immediately
+      const newRoot = createNode(val);
+      calculateLayout(newRoot);
+      setTreeRoot(newRoot);
+      setInputValue('');
+      setInfoDesc(`🎉 Successfully inserted node ${val} as the root node.`);
+      setIsPlaying(false);
     }
-
-    // Check tree depth limit (max depth = 4 levels from root, level 0 to 4 => max 5 depth)
-    const depth = getTreeDepth(result.node);
-    if (depth > 5) {
-      setInfoDesc("⚠️ Tree depth limit exceeded! Please insert values that keep the tree balanced.");
-      return;
-    }
-
-    calculateLayout(result.node);
-    setTreeRoot(result.node);
-    setInputValue('');
-    setInfoDesc(`Successfully inserted node ${val} into the BST.`);
-    setStepLog(prev => [...prev, `Inserted Node ${val}`]);
   };
 
   const handleDelete = () => {
     const val = parseInt(inputValue);
     if (isNaN(val)) {
-      setInfoDesc("⚠️ Please enter a valid integer to delete.");
+      setInfoDesc("⚠️ Please enter a valid number to delete.");
+      return;
+    }
+
+    // Check if node exists
+    const checkExists = (node) => {
+      if (!node) return false;
+      if (val === node.value) return true;
+      return val < node.value ? checkExists(node.left) : checkExists(node.right);
+    };
+
+    if (!checkExists(treeRoot)) {
+      setInfoDesc(`⚠️ Node ${val} does not exist in the BST.`);
       return;
     }
 
     handleResetVisuals();
+    setIsPlaying(true);
+    setInfoDesc(`Finding node ${val} to delete...`);
 
-    const deleteHelper = (currNode, value) => {
-      if (!currNode) return { node: null, found: false };
-      let found = false;
+    // Trace path to target node
+    const deletePath = [];
+    const getDeletePath = (node) => {
+      if (!node) return;
+      deletePath.push(node.value);
+      if (val === node.value) return;
+      if (val < node.value) getDeletePath(node.left);
+      else getDeletePath(node.right);
+    };
+    getDeletePath(treeRoot);
 
-      if (value < currNode.value) {
-        const res = deleteHelper(currNode.left, value);
-        currNode.left = res.node;
-        found = res.found;
-      } else if (value > currNode.value) {
-        const res = deleteHelper(currNode.right, value);
-        currNode.right = res.node;
-        found = res.found;
-      } else {
-        found = true;
-        // Node found
-        if (!currNode.left) return { node: currNode.right, found: true };
-        if (!currNode.right) return { node: currNode.left, found: true };
+    const animateDeletion = (pathIndex = 0) => {
+      if (pathIndex === deletePath.length) {
+        // Node found, execute actual deletion
+        const rootClone = cloneTree(treeRoot);
         
-        // Successor node (min of right child)
-        let successor = currNode.right;
-        while (successor.left) {
-          successor = successor.left;
-        }
-        currNode.value = successor.value;
-        const res = deleteHelper(currNode.right, successor.value);
-        currNode.right = res.node;
+        const deleteHelper = (currNode, value) => {
+          if (!currNode) return null;
+          if (value < currNode.value) {
+            currNode.left = deleteHelper(currNode.left, value);
+          } else if (value > currNode.value) {
+            currNode.right = deleteHelper(currNode.right, value);
+          } else {
+            // Node found
+            if (!currNode.left) return currNode.right;
+            if (!currNode.right) return currNode.left;
+            
+            // successor selection
+            let successor = currNode.right;
+            while (successor.left) {
+              successor = successor.left;
+            }
+            currNode.value = successor.value;
+            currNode.right = deleteHelper(currNode.right, successor.value);
+          }
+          return currNode;
+        };
+
+        const newRoot = deleteHelper(rootClone, val);
+        calculateLayout(newRoot);
+        
+        // Reset statuses
+        const resetNodeStatus = (n) => {
+          if (!n) return;
+          n.status = 'normal';
+          resetNodeStatus(n.left);
+          resetNodeStatus(n.right);
+        };
+        resetNodeStatus(newRoot);
+
+        setTreeRoot(newRoot);
+        setIsPlaying(false);
+        setInputValue('');
+        setInfoDesc(`🎉 Successfully deleted node ${val} from the BST.`);
+        setStepLog(prev => [...prev, `Deleted Node ${val}`]);
+        return;
       }
-      return { node: currNode, found };
+
+      const tId = setTimeout(() => {
+        const currentInspectVal = deletePath[pathIndex];
+        const isTargetNode = currentInspectVal === val;
+
+        setTreeRoot(prev => {
+          const rootCopy = cloneTree(prev);
+          const updateStatus = (n) => {
+            if (!n) return;
+            if (n.value === currentInspectVal) {
+              n.status = isTargetNode ? 'target' : 'active';
+            } else if (deletePath.slice(0, pathIndex).includes(n.value)) {
+              n.status = 'visited';
+            } else {
+              n.status = 'normal';
+            }
+            updateStatus(n.left);
+            updateStatus(n.right);
+          };
+          updateStatus(rootCopy);
+          return rootCopy;
+        });
+
+        playTone(currentInspectVal, 100);
+        setStepLog(prev => [
+          ...prev, 
+          isTargetNode 
+            ? `Found target Node ${val} for deletion!` 
+            : `Inspecting Node ${currentInspectVal}... comparing with ${val}... Go ${val < currentInspectVal ? 'Left ↙' : 'Right ↘'}`
+        ]);
+        animateDeletion(pathIndex + 1);
+      }, speedRef.current);
+      timeoutsRef.current.push(tId);
     };
 
-    const rootClone = cloneTree(treeRoot);
-    const result = deleteHelper(rootClone, val);
-
-    if (!result.found) {
-      setInfoDesc(`⚠️ Node ${val} not found in the BST.`);
-      return;
+    if (deletePath.length > 0) {
+      animateDeletion(0);
     }
-
-    calculateLayout(result.node);
-    setTreeRoot(result.node);
-    setInputValue('');
-    setInfoDesc(`Successfully deleted node ${val} from the BST.`);
-    setStepLog(prev => [...prev, `Deleted Node ${val}`]);
   };
 
   const handleSearch = () => {
@@ -307,6 +447,8 @@ export function TreePage() {
               n.status = isLastNode ? 'target' : 'active';
             } else if (searchPath.slice(0, pathIndex).includes(n.value)) {
               n.status = 'visited';
+            } else {
+              n.status = 'normal';
             }
             updateStatus(n.left);
             updateStatus(n.right);
@@ -316,7 +458,12 @@ export function TreePage() {
         });
 
         playTone(currentSearchVal, 100);
-        setStepLog(prev => [...prev, `Inspecting node ${currentSearchVal}...`]);
+        setStepLog(prev => [
+          ...prev, 
+          isLastNode 
+            ? `Target Node ${val} found!` 
+            : `Comparing ${val} with Node ${currentSearchVal}... Go ${val < currentSearchVal ? 'Left ↙' : 'Right ↘'}`
+        ]);
         animateSearch(pathIndex + 1);
       }, speedRef.current);
       timeoutsRef.current.push(tId);

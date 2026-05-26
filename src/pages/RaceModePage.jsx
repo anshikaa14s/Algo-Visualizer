@@ -15,6 +15,10 @@ import {
   mergeSort, 
   quickSort 
 } from '../algorithms/sorting';
+import { 
+  linearSearch, 
+  binarySearch 
+} from '../algorithms/searching';
 import { useAudioSynth } from '../hooks/useAudioSynth';
 import confetti from 'canvas-confetti';
 
@@ -24,6 +28,8 @@ export function RaceModePage() {
   const [arraySize, setArraySize] = useState(25);
   const [speed, setSpeed] = useState(80); // speed of tick in ms
   const [isPlaying, setIsPlaying] = useState(false);
+  const [raceCategory, setRaceCategory] = useState('sorting'); // 'sorting' or 'searching'
+  const [target, setTarget] = useState(45);
 
   // Separate visual arrays (must start identical)
   const [arrayLeft, setArrayLeft] = useState([]);
@@ -67,6 +73,18 @@ export function RaceModePage() {
     for (let i = 0; i < arraySize; i++) {
       seed.push(Math.floor(Math.random() * (maxVal - minVal + 1)) + minVal);
     }
+    
+    if (raceCategory === 'searching') {
+      seed.sort((x, y) => x - y);
+      const shouldExist = Math.random() < 0.8;
+      if (shouldExist) {
+        const idx = Math.floor(Math.random() * arraySize);
+        setTarget(seed[idx]);
+      } else {
+        setTarget(Math.floor(Math.random() * 120) + 15);
+      }
+    }
+    
     initialSeedRef.current = seed;
     
     // Distribute identical arrays
@@ -98,17 +116,34 @@ export function RaceModePage() {
     }
   };
 
+  const handleCategoryChange = (cat) => {
+    setRaceCategory(cat);
+    if (cat === 'sorting') {
+      setAlgoLeft('quick');
+      setAlgoRight('bubble');
+    } else {
+      setAlgoLeft('linear');
+      setAlgoRight('binary');
+    }
+  };
+
   useEffect(() => {
     generateSharedArray();
-  }, [arraySize]);
+  }, [arraySize, raceCategory]);
 
   const getGenerator = (algoType, arr) => {
-    if (algoType === 'bubble') return bubbleSort(arr);
-    if (algoType === 'selection') return selectionSort(arr);
-    if (algoType === 'insertion') return insertionSort(arr);
-    if (algoType === 'merge') return mergeSort(arr);
-    if (algoType === 'quick') return quickSort(arr);
-    return bubbleSort(arr);
+    if (raceCategory === 'sorting') {
+      if (algoType === 'bubble') return bubbleSort(arr);
+      if (algoType === 'selection') return selectionSort(arr);
+      if (algoType === 'insertion') return insertionSort(arr);
+      if (algoType === 'merge') return mergeSort(arr);
+      if (algoType === 'quick') return quickSort(arr);
+      return bubbleSort(arr);
+    } else {
+      if (algoType === 'linear') return linearSearch(arr, target);
+      if (algoType === 'binary') return binarySearch(arr, target);
+      return linearSearch(arr, target);
+    }
   };
 
   const startRace = () => {
@@ -141,16 +176,34 @@ export function RaceModePage() {
           setSwappedLeft([]);
         } else {
           setArrayLeft(step.value.array);
-          setComparedLeft(step.value.compared || []);
-          setSwappedLeft(step.value.swapped || []);
-          setSortedLeft(step.value.sorted || []);
-          setStatsLeft({
-            comparisons: step.value.stats.comparisons,
-            swaps: step.value.stats.swaps,
-            time: currentElapsed
-          });
+          if (raceCategory === 'sorting') {
+            setComparedLeft(step.value.compared || []);
+            setSwappedLeft(step.value.swapped || []);
+            setSortedLeft(step.value.sorted || []);
+            setStatsLeft({
+              comparisons: step.value.stats.comparisons,
+              swaps: step.value.stats.swaps,
+              time: currentElapsed
+            });
+          } else {
+            setComparedLeft(step.value.active !== null ? [step.value.active] : []);
+            setSwappedLeft(step.value.found !== null && step.value.found !== -1 ? [step.value.found] : []);
+            setSortedLeft(step.value.checked || []);
+            setStatsLeft({
+              comparisons: step.value.stats.comparisons,
+              swaps: 0,
+              time: currentElapsed
+            });
+            if (step.value.found !== null) {
+              leftFinished = true;
+              leftDoneTimeRef.current = currentElapsed;
+              setComparedLeft([]);
+            }
+          }
           if (soundEnabled && step.value.compared && step.value.compared.length > 0) {
             playTone(step.value.array[step.value.compared[0]], 150);
+          } else if (soundEnabled && step.value.active !== null) {
+            playTone(step.value.array[step.value.active], 150);
           }
         }
       }
@@ -165,16 +218,34 @@ export function RaceModePage() {
           setSwappedRight([]);
         } else {
           setArrayRight(step.value.array);
-          setComparedRight(step.value.compared || []);
-          setSwappedRight(step.value.swapped || []);
-          setSortedRight(step.value.sorted || []);
-          setStatsRight({
-            comparisons: step.value.stats.comparisons,
-            swaps: step.value.stats.swaps,
-            time: currentElapsed
-          });
+          if (raceCategory === 'sorting') {
+            setComparedRight(step.value.compared || []);
+            setSwappedRight(step.value.swapped || []);
+            setSortedRight(step.value.sorted || []);
+            setStatsRight({
+              comparisons: step.value.stats.comparisons,
+              swaps: step.value.stats.swaps,
+              time: currentElapsed
+            });
+          } else {
+            setComparedRight(step.value.active !== null ? [step.value.active] : []);
+            setSwappedRight(step.value.found !== null && step.value.found !== -1 ? [step.value.found] : []);
+            setSortedRight(step.value.checked || []);
+            setStatsRight({
+              comparisons: step.value.stats.comparisons,
+              swaps: 0,
+              time: currentElapsed
+            });
+            if (step.value.found !== null) {
+              rightFinished = true;
+              rightDoneTimeRef.current = currentElapsed;
+              setComparedRight([]);
+            }
+          }
           if (soundEnabled && step.value.compared && step.value.compared.length > 0) {
             playTone(step.value.array[step.value.compared[0]], 150);
+          } else if (soundEnabled && step.value.active !== null) {
+            playTone(step.value.array[step.value.active], 150);
           }
         }
       }
@@ -200,15 +271,15 @@ export function RaceModePage() {
     let loserTime = 0;
     let desc = "";
 
-    const nameL = algoLeft.charAt(0).toUpperCase() + algoLeft.slice(1) + " Sort";
-    const nameR = algoRight.charAt(0).toUpperCase() + algoRight.slice(1) + " Sort";
+    const nameL = algoLeft.charAt(0).toUpperCase() + algoLeft.slice(1) + (raceCategory === 'sorting' ? " Sort" : " Search");
+    const nameR = algoRight.charAt(0).toUpperCase() + algoRight.slice(1) + (raceCategory === 'sorting' ? " Sort" : " Search");
 
     if (tL < tR) {
       winnerName = nameL;
       loserName = nameR;
       winnerTime = tL;
       loserTime = tR;
-      desc = `${winnerName} finished first, completing the sorting task in ${winnerTime}ms compared to ${loserTime}ms!`;
+      desc = `${winnerName} finished first, completing the ${raceCategory} task in ${winnerTime}ms compared to ${loserTime}ms!`;
     } else if (tR < tL) {
       winnerName = nameR;
       loserName = nameL;
@@ -217,7 +288,7 @@ export function RaceModePage() {
       desc = `${winnerName} dominated the race, wrapping up in ${winnerTime}ms, beating out ${loserName}'s ${loserTime}ms!`;
     } else {
       winnerName = "It's a Tie!";
-      desc = "Both algorithms sorted the identical seed arrays in the exact same time!";
+      desc = `Both algorithms solved the identical ${raceCategory} arrays in the exact same time!`;
     }
 
     setWinnerDetails({
@@ -271,12 +342,28 @@ export function RaceModePage() {
               Algorithm Race Mode
             </h1>
             <p className="text-text-muted text-xs font-mono mt-1">
-              Select two sorting routines to solve an identical seed array and announce the speed winner
+              Select two routines to solve identical datasets and benchmark their efficiency side-by-side
             </p>
           </div>
 
           {/* Quick controls bar */}
           <div className="flex flex-wrap items-center gap-4 bg-white/5 border border-white/5 px-4 py-3 rounded-2xl">
+            {/* Race Category selection */}
+            <div className="flex flex-col">
+              <span className="text-[10px] text-text-muted font-mono uppercase tracking-wider font-semibold">Race Category</span>
+              <select
+                value={raceCategory}
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                disabled={isPlaying}
+                className="bg-transparent text-sm font-semibold text-white focus:outline-none border-none cursor-pointer mt-1"
+              >
+                <option value="sorting" className="bg-bg-secondary text-white">Sorting</option>
+                <option value="searching" className="bg-bg-secondary text-white">Searching</option>
+              </select>
+            </div>
+
+            <div className="h-6 w-px bg-white/10" />
+
             {/* Speed selection */}
             <div className="flex flex-col w-24">
               <span className="text-[10px] text-text-muted font-mono uppercase tracking-wider font-semibold">Tick Speed</span>
@@ -308,6 +395,29 @@ export function RaceModePage() {
                 <option value="35" className="bg-bg-secondary text-white">35 nodes</option>
               </select>
             </div>
+
+            {raceCategory === 'searching' && (
+              <>
+                <div className="h-6 w-px bg-white/10" />
+                <div className="flex flex-col w-20">
+                  <span className="text-[10px] text-text-muted font-mono uppercase tracking-wider font-semibold">Target</span>
+                  <input
+                    type="number"
+                    value={target}
+                    disabled={isPlaying}
+                    onChange={(e) => {
+                      const newTarget = Math.max(0, Number(e.target.value));
+                      setTarget(newTarget);
+                      genLeftRef.current = null;
+                      genRightRef.current = null;
+                      setRaceFinished(false);
+                      setWinnerDetails(null);
+                    }}
+                    className="bg-transparent text-sm font-semibold text-brand-primary focus:outline-none border-none mt-1 font-mono w-full"
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -323,31 +433,59 @@ export function RaceModePage() {
                 disabled={isPlaying}
                 className="bg-bg-secondary border border-white/5 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none font-bold"
               >
-                <option value="bubble">Bubble Sort</option>
-                <option value="selection">Selection Sort</option>
-                <option value="insertion">Insertion Sort</option>
-                <option value="merge">Merge Sort</option>
-                <option value="quick">Quick Sort</option>
+                {raceCategory === 'sorting' ? (
+                  <>
+                    <option value="bubble">Bubble Sort</option>
+                    <option value="selection">Selection Sort</option>
+                    <option value="insertion">Insertion Sort</option>
+                    <option value="merge">Merge Sort</option>
+                    <option value="quick">Quick Sort</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="linear">Linear Search</option>
+                    <option value="binary">Binary Search</option>
+                  </>
+                )}
               </select>
               
               <div className="flex gap-4 font-mono text-[10px] text-text-muted">
                 <span>Compares: <strong className="text-white">{statsLeft.comparisons}</strong></span>
-                <span>Swaps: <strong className="text-brand-primary">{statsLeft.swaps}</strong></span>
+                {raceCategory === 'sorting' && (
+                  <span>Swaps: <strong className="text-brand-primary">{statsLeft.swaps}</strong></span>
+                )}
                 <span>Clock: <strong className="text-brand-secondary">{statsLeft.time}ms</strong></span>
               </div>
             </div>
 
             {/* Bars Area */}
-            <div className="flex-1 flex items-end justify-center gap-1.5 px-2 pb-2 mt-12 overflow-hidden h-[240px]">
+            <div className="flex-1 flex items-end justify-center gap-1 md:gap-1.5 px-2 pb-2 mt-12 overflow-hidden h-[240px]">
               {arrayLeft.map((val, idx) => {
-                const max = Math.max(...arrayLeft);
-                const pct = `${(val / max) * 100}%`;
+                const max = Math.max(...arrayLeft) || 1;
+                const pct = `${(val / max) * 80 + 10}%`;
                 return (
                   <div
                     key={idx}
-                    style={{ height: pct }}
-                    className={`w-full rounded-t-sm bg-gradient-to-t transition-all duration-700 ${getBarColorLeft(idx)}`}
-                  />
+                    className="flex flex-col items-center justify-end h-full flex-1 group relative"
+                  >
+                    <span 
+                      style={{ 
+                        bottom: `calc(${pct} + 2px)`,
+                        transform: arraySize <= 25 ? 'translateX(-50%)' : 'translateX(-50%) rotate(-90deg) translateY(-2px)',
+                        transformOrigin: 'left center'
+                      }}
+                      className={`absolute left-1/2 font-mono font-bold text-white select-none animate-fade-in transition-all z-10 ${
+                        arraySize <= 25 ? 'text-[8px] opacity-85' : 'text-[6px] opacity-70 whitespace-nowrap'
+                      }`}
+                    >
+                      {val}
+                    </span>
+
+                    <div
+                      style={{ height: pct }}
+                      className={`w-full rounded-t-sm bg-gradient-to-t transition-all duration-300 ${getBarColorLeft(idx)}`}
+                    />
+                  </div>
                 );
               })}
             </div>
@@ -362,31 +500,59 @@ export function RaceModePage() {
                 disabled={isPlaying}
                 className="bg-bg-secondary border border-white/5 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none font-bold"
               >
-                <option value="bubble">Bubble Sort</option>
-                <option value="selection">Selection Sort</option>
-                <option value="insertion">Insertion Sort</option>
-                <option value="merge">Merge Sort</option>
-                <option value="quick">Quick Sort</option>
+                {raceCategory === 'sorting' ? (
+                  <>
+                    <option value="bubble">Bubble Sort</option>
+                    <option value="selection">Selection Sort</option>
+                    <option value="insertion">Insertion Sort</option>
+                    <option value="merge">Merge Sort</option>
+                    <option value="quick">Quick Sort</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="linear">Linear Search</option>
+                    <option value="binary">Binary Search</option>
+                  </>
+                )}
               </select>
               
               <div className="flex gap-4 font-mono text-[10px] text-text-muted">
                 <span>Compares: <strong className="text-white">{statsRight.comparisons}</strong></span>
-                <span>Swaps: <strong className="text-brand-primary">{statsRight.swaps}</strong></span>
+                {raceCategory === 'sorting' && (
+                  <span>Swaps: <strong className="text-brand-primary">{statsRight.swaps}</strong></span>
+                )}
                 <span>Clock: <strong className="text-brand-secondary">{statsRight.time}ms</strong></span>
               </div>
             </div>
 
             {/* Bars Area */}
-            <div className="flex-1 flex items-end justify-center gap-1.5 px-2 pb-2 mt-12 overflow-hidden h-[240px]">
+            <div className="flex-1 flex items-end justify-center gap-1 md:gap-1.5 px-2 pb-2 mt-12 overflow-hidden h-[240px]">
               {arrayRight.map((val, idx) => {
-                const max = Math.max(...arrayRight);
-                const pct = `${(val / max) * 100}%`;
+                const max = Math.max(...arrayRight) || 1;
+                const pct = `${(val / max) * 80 + 10}%`;
                 return (
                   <div
                     key={idx}
-                    style={{ height: pct }}
-                    className={`w-full rounded-t-sm bg-gradient-to-t transition-all duration-700 ${getBarColorRight(idx)}`}
-                  />
+                    className="flex flex-col items-center justify-end h-full flex-1 group relative"
+                  >
+                    <span 
+                      style={{ 
+                        bottom: `calc(${pct} + 2px)`,
+                        transform: arraySize <= 25 ? 'translateX(-50%)' : 'translateX(-50%) rotate(-90deg) translateY(-2px)',
+                        transformOrigin: 'left center'
+                      }}
+                      className={`absolute left-1/2 font-mono font-bold text-white select-none animate-fade-in transition-all z-10 ${
+                        arraySize <= 25 ? 'text-[8px] opacity-85' : 'text-[6px] opacity-70 whitespace-nowrap'
+                      }`}
+                    >
+                      {val}
+                    </span>
+
+                    <div
+                      style={{ height: pct }}
+                      className={`w-full rounded-t-sm bg-gradient-to-t transition-all duration-300 ${getBarColorRight(idx)}`}
+                    />
+                  </div>
                 );
               })}
             </div>
